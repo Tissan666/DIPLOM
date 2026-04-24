@@ -1,0 +1,96 @@
+{
+  "request": {
+    "source_url": "sample-local-html",
+    "source_site": "unknown",
+    "source_type": "inline_html",
+    "model_family": "pytorch-review-classifier"
+  },
+  "summary": {
+    "source_url": "sample-local-html",
+    "source_site": "unknown",
+    "source_type": "inline_html",
+    "total_reviews": 2,
+    "suspicious_reviews": 1,
+    "clean_reviews": 1,
+    "suspicious_ratio": 0.5,
+    "threshold": 0.3,
+    "average_probability": 0.56,
+    "highest_probability": 1.0,
+    "risk_level": "high"
+  },
+  "highlights": {
+    "top_reasons": [
+      {
+        "reason": "The neural model considers this review highly suspicious.",
+        "count": 1
+      },
+      {
+        "reason": "The text relies on heavy emotional punctuation.",
+        "count": 1
+      }
+    ],
+    "most_suspicious_review": {
+      "review_id": 2,
+      "author": "Bob",
+      "title": "Best purchase ever",
+      "rating": 5.0,
+      "date": "2026-03-11",
+      "review_text": "Absolutely amazing!!! Best purchase ever!!! Everyone must buy this right now!!!",
+      "source_url": "sample-local-html",
+      "source_site": "unknown",
+      "suspicious_probability": 1.0,
+      "is_suspicious": 1,
+      "risk_level": "high",
+      "word_count": 10,
+      "character_count": 77,
+      "suspicion_reasons": [
+        "The neural model considers this review highly suspicious.",
+        "The text relies on heavy emotional punctuation.",
+        "The wording looks promotional or strongly templated.",
+        "An extreme rating is paired with a generic explanation."
+      ]
+    },
+    "notes": [
+      "Suspicious reviews are ranked by the model probability score."
+    ]
+  },
+  "reviews": [
+    {
+      "review_id": 1,
+      "author": "Alice",
+      "title": "Very solid everyday item",
+      "rating": 4.0,
+      "date": "2026-03-10",
+      "review_text": "I used this product for two weeks and it works as expected. Build quality is solid and the setup was simple.",
+      "source_url": "sample-local-html",
+      "source_site": "unknown",
+      "suspicious_probability": 0.12,
+      "is_suspicious": 0,
+      "risk_level": "low",
+      "word_count": 19,
+      "character_count": 108,
+      "suspicion_reasons": []
+    },
+    {
+      "review_id": 2,
+      "author": "Bob",
+      "title": "Best purchase ever",
+      "rating": 5.0,
+      "date": "2026-03-11",
+      "review_text": "Absolutely amazing!!! Best purchase ever!!! Everyone must buy this right now!!!",
+      "source_url": "sample-local-html",
+      "source_site": "unknown",
+      "suspicious_probability": 1.0,
+      "is_suspicious": 1,
+      "risk_level": "high",
+      "word_count": 10,
+      "character_count": 77,
+      "suspicion_reasons": [
+        "The neural model considers this review highly suspicious.",
+        "The text relies on heavy emotional punctuation.",
+        "The wording looks promotional or strongly templated.",
+        "An extreme rating is paired with a generic explanation."
+      ]
+    }
+  ]
+}

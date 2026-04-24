@@ -1,0 +1,63 @@
+{
+  "output_path": "data\\combined_review_training_smoke.csv",
+  "records_total": 1658,
+  "label_distribution": {
+    "0": 495,
+    "1": 1163
+  },
+  "source_distribution": {
+    "synthetic_suspicious_augmented": 711,
+    "synthetic_suspicious_template": 452,
+    "turkish_user_reviews": 100,
+    "recipe_reviews_zip": 100,
+    "grammar_product_reviews": 100,
+    "uci_recipe_reviews_911": 99,
+    "uci_travel_review_ratings_485": 96
+  },
+  "source_reports": [
+    {
+      "source": "grammar_product_reviews",
+      "path": "C:\\Users\\User\\Downloads\\GrammarandProductReviews.zip",
+      "status": "loaded",
+      "records_raw": 71044,
+      "records_used": 100
+    },
+    {
+      "source": "recipe_reviews_zip",
+      "path": "C:\\Users\\User\\Downloads\\recipe+reviews+and+user+feedback+dataset.zip",
+      "status": "loaded",
+      "records_raw": 18182,
+      "records_used": 100
+    },
+    {
+      "source": "turkish_user_reviews",
+      "path": "C:\\Users\\User\\Downloads\\turkish+user+review+dataset.zip",
+      "status": "loaded",
+      "records_raw": 34284,
+      "records_used": 100
+    },
+    {
+      "source": "amazon_commerce_reviews_set",
+      "path": "C:\\Users\\User\\Downloads\\amazon+commerce+reviews+set.zip",
+      "status": "skipped",
+      "records_raw": 0,
+      "records_used": 0,
+      "archive_members": [
+        "Amazon_initial_50_30_10000.rar"
+      ],
+      "reason": "The archive contains a nested RAR file. No safe text-review parser is configured for it yet. The extracted ARFF snapshot appears zero-filled, so it was excluded from training."
+    },
+    {
+      "source": "uci_recipe_reviews_911",
+      "status": "loaded",
+      "records_raw": 18182,
+      "records_used": 100
+    },
+    {
+      "source": "uci_travel_review_ratings_485",
+      "status": "loaded",
+      "records_raw": 5456,
+      "records_used": 100
+    }
+  ]
+}

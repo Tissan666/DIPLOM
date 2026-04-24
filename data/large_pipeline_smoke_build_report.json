@@ -1,0 +1,75 @@
+{
+  "output_path": "data\\large_pipeline_smoke.csv",
+  "records_total": 39,
+  "label_distribution": {
+    "0": 20,
+    "1": 19
+  },
+  "source_distribution": {
+    "synthetic_suspicious_template": 19,
+    "grammar_product_reviews": 5,
+    "turkish_user_reviews": 5,
+    "recipe_reviews_zip": 5,
+    "amazon_reviews_2023:raw_review_All_Beauty": 5
+  },
+  "source_reports": [
+    {
+      "source": "grammar_product_reviews",
+      "path": "C:\\Users\\User\\Downloads\\GrammarandProductReviews.zip",
+      "status": "loaded",
+      "records_raw": 71044,
+      "records_used": 5
+    },
+    {
+      "source": "recipe_reviews_zip",
+      "path": "C:\\Users\\User\\Downloads\\recipe+reviews+and+user+feedback+dataset.zip",
+      "status": "loaded",
+      "records_raw": 18182,
+      "records_used": 5
+    },
+    {
+      "source": "turkish_user_reviews",
+      "path": "C:\\Users\\User\\Downloads\\turkish+user+review+dataset.zip",
+      "status": "loaded",
+      "records_raw": 34284,
+      "records_used": 5
+    },
+    {
+      "source": "amazon_commerce_reviews_set",
+      "path": "C:\\Users\\User\\Downloads\\amazon+commerce+reviews+set.zip",
+      "status": "skipped",
+      "records_raw": 0,
+      "records_used": 0,
+      "archive_members": [
+        "Amazon_initial_50_30_10000.rar"
+      ],
+      "reason": "The archive contains a nested RAR file. No safe text-review parser is configured for it yet. The extracted ARFF snapshot appears zero-filled, so it was excluded from training."
+    },
+    {
+      "source": "amazon_reviews_2023",
+      "repo_id": "McAuley-Lab/Amazon-Reviews-2023",
+      "config": "raw_review_All_Beauty",
+      "split": "full",
+      "status": "loaded",
+      "records_raw": 5,
+      "records_used": 5
+    },
+    {
+      "source": "yelp_open_dataset",
+      "path": "C:\\Users\\User\\Downloads\\yelp_academic_dataset_review.json",
+      "resolved_path": null,
+      "status": "missing",
+      "records_raw": 0,
+      "records_used": 0,
+      "reason": "Yelp review JSON file was not found."
+    },
+    {
+      "source": "yelpnyc_labeled_reviews",
+      "path": "C:\\Users\\User\\Downloads\\YelpNYC.csv",
+      "status": "missing",
+      "records_raw": 0,
+      "records_used": 0,
+      "reason": "YelpNYC file was not found. The official labeled dataset is provided by request."
+    }
+  ]
+}

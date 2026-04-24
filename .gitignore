@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.pytest_cache/
+.env
+.env.local
+outputs/
+data/external_temp/
+*.rar
+*.zip
+*.7z
+frontend/dist/
+frontend/node_modules/
+frontend/*.tsbuildinfo
