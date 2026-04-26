@@ -97,6 +97,28 @@ Generated artifacts usually include:
 - `outputs/review_training_summary.json`
 - `outputs/system_training_summary.json`
 
+## Evaluation
+
+Run model evaluation without retraining:
+
+```powershell
+.venv\Scripts\python.exe evaluate.py --review-dataset data\combined_review_training.csv --ratings-dataset data\sample_ratings.csv
+```
+
+For a faster smoke evaluation:
+
+```powershell
+.venv\Scripts\python.exe evaluate.py --review-dataset data\combined_review_training_smoke.csv --ratings-dataset data\sample_ratings.csv --output-dir outputs\evaluation_smoke
+```
+
+Evaluation reports are written under `outputs/evaluation/` or the selected output directory:
+
+- `evaluation_summary.json`
+- `review_model_evaluation.json`
+- `rating_model_evaluation.json`
+
+The reports include precision, recall, F1, ROC-AUC, PR-AUC, confusion matrix, calibration bins, expected calibration error, Brier score, threshold profiles, source/product/language/length slices, false-positive and false-negative examples, robustness probes, triage summaries, and practical recommendations.
+
 ## Review collection
 
 The Playwright collector renders public pages, scrolls review feeds, exports JSON and CSV, and stops on captcha, `403`, or `429` instead of bypassing access controls.
@@ -104,21 +126,36 @@ The Playwright collector renders public pages, scrolls review feeds, exports JSO
 Install the browser once:
 
 ```powershell
-pip install -r requirements.txt
-python -m playwright install chromium
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m playwright install chromium
+```
+
+Smoke-test Playwright on the bundled sample page:
+
+```powershell
+$sampleUrl = "file:///" + ((Resolve-Path examples\sample_product_reviews.html).Path -replace "\\", "/")
+.venv\Scripts\python.exe collect_reviews.py $sampleUrl --marketplace generic --max-reviews 10 --headless --output-dir outputs\playwright_smoke
 ```
 
 Run collection:
 
 ```powershell
-python collect_reviews.py "https://example.com/product-page" --marketplace generic --max-reviews 200
+.venv\Scripts\python.exe collect_reviews.py "https://example.com/product-page" --marketplace generic --max-reviews 200 --headless
 ```
 
 For marketplace debugging, headed mode is often easier:
 
 ```powershell
-python collect_reviews.py "https://example.com/product-page" --marketplace wildberries --max-reviews 200
+.venv\Scripts\python.exe collect_reviews.py "https://example.com/product-page" --marketplace wildberries --max-reviews 200
 ```
+
+AliExpress pages usually load reviews through dynamic widgets/API calls, so use the dedicated adapter and start with visible Chromium when checking a real product URL:
+
+```powershell
+.venv\Scripts\python.exe collect_reviews.py "https://www.aliexpress.com/item/PRODUCT_ID.html" --marketplace aliexpress --max-reviews 200
+```
+
+The collector records public data only. If AliExpress returns a login wall, captcha, 403, or 429, collection stops and reports the barrier instead of trying to bypass it.
 
 Collector outputs are saved under `outputs/collected_reviews/`.
 

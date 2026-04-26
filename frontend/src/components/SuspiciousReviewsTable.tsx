@@ -498,12 +498,12 @@ function triageChipClass(status: SuspiciousReviewRow["triageStatus"]) {
 function triageStatusLabel(status: SuspiciousReviewRow["triageStatus"], locale: Locale) {
   if (locale === "ru") {
     if (status === "confident_suspicious") {
-      return "Triage: уверенно подозрительный";
+      return "Проверка: уверенно подозрительный";
     }
     if (status === "needs_manual_review") {
-      return "Triage: ручная проверка";
+      return "Проверка: ручная проверка";
     }
-    return "Triage: уверенно чистый";
+    return "Проверка: уверенно чистый";
   }
 
   if (status === "confident_suspicious") {

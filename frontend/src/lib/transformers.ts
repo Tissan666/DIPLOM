@@ -72,13 +72,62 @@ const knownTextTranslations: Record<string, string> = {
   "Low-risk review profile": "Низкорисковый профиль отзывов",
   "Extraction coverage": "Покрытие извлечения отзывов",
   "The neural model considers this review highly suspicious.": "Нейросетевая модель считает этот отзыв сильно подозрительным.",
+  "The review has several linguistic patterns often seen in manipulated feedback.": "В отзыве есть несколько языковых паттернов, которые часто встречаются в накрученной обратной связи.",
+  "The review is unusually short and provides very little concrete detail.": "Отзыв необычно короткий и почти не содержит конкретных деталей.",
   "The text relies on heavy emotional punctuation.": "Текст опирается на чрезмерно эмоциональную пунктуацию.",
   "The wording looks promotional or strongly templated.": "Формулировки выглядят рекламно или слишком шаблонно.",
+  "There is visible repetition, which can indicate scripted review text.": "В тексте заметны повторы, что может указывать на заранее подготовленный отзыв.",
   "An extreme rating is paired with a generic explanation.": "Экстремальная оценка сочетается со слишком общей аргументацией.",
   "The wording resembles promotional or templated review language.": "Формулировки похожи на рекламный или шаблонный язык отзывов.",
   "The model routed this review to manual moderation.": "Модель отправила этот отзыв на ручную модерацию.",
   "Hybrid detector considered this review unusual.": "Гибридный детектор посчитал этот отзыв нетипичным.",
   "Behavioral autoencoder marked this record as anomalous.": "Поведенческий автоэнкодер отметил эту запись как аномальную.",
+  "No reviews were available for scoring.": "Нет отзывов, доступных для скоринга.",
+  "The model did not flag any extracted reviews as suspicious.": "Модель не отметила извлечённые отзывы как подозрительные.",
+  "Suspicious reviews are ranked by a calibrated hybrid score that combines the neural text model and manipulation signals.": "Подозрительные отзывы ранжируются калиброванным гибридным скором, который объединяет нейросетевую текстовую модель и сигналы манипуляции.",
+  "Behavioral and statistical page signals also suggest possible rating manipulation.": "Поведенческие и статистические сигналы страницы также указывают на возможную накрутку рейтинга.",
+  "The same or nearly identical review text appears multiple times on this page.": "Одинаковый или почти одинаковый текст отзыва встречается на странице несколько раз.",
+  "The review title repeats across multiple ratings.": "Заголовок отзыва повторяется в нескольких оценках.",
+  "The same author appears unusually often in the current review sample.": "Один и тот же автор необычно часто встречается в текущей выборке отзывов.",
+  "Many reviews were published in a tight date cluster.": "Много отзывов опубликовано в плотном временном кластере.",
+  "The date cluster is dominated by extreme ratings.": "Во временном кластере преобладают экстремальные оценки.",
+  "An extreme rating is paired with a very short explanation.": "Экстремальная оценка сочетается с очень коротким объяснением.",
+  "The page is dominated by extreme ratings, which may indicate manipulation.": "На странице преобладают экстремальные оценки, что может указывать на манипуляцию.",
+  "A noticeable share of the page contains duplicated review content.": "Заметная часть страницы содержит дублирующийся текст отзывов.",
+  "A large portion of the reviews appeared on the same day.": "Большая часть отзывов появилась в один день.",
+  "A small set of authors contributes a disproportionate share of reviews.": "Небольшая группа авторов оставила непропорционально большую долю отзывов.",
+  "Many comments rely on hype-heavy slang instead of grounded product detail.": "Многие комментарии опираются на хайповый сленг вместо конкретных деталей о товаре.",
+  "Russian and English slang are mixed unusually often across the current review page.": "Русский и английский сленг необычно часто смешиваются на текущей странице отзывов.",
+  "Russian and English slang are mixed unusually often across the current review sample.": "Русский и английский сленг необычно часто смешиваются в текущей выборке отзывов.",
+  "A repeated slang template appears across multiple reviews on the page.": "Повторяющийся slang-шаблон встречается в нескольких отзывах на странице.",
+  "A repeated slang template appears across multiple reviews, which strengthens the coordination hypothesis.": "Повторяющийся slang-шаблон встречается в нескольких отзывах, что усиливает гипотезу координации.",
+  "A similar slang-heavy template repeats across multiple ratings.": "Похожий slang-шаблон повторяется в нескольких оценках.",
+  "A similar slang signature appears across multiple reviews, which looks coordinated.": "Похожий slang-сигнатурный паттерн встречается в нескольких отзывах и выглядит скоординированным.",
+  "Several comments use grounded colloquial language with concrete detail, which slightly weakens the fake-review hypothesis.": "Несколько комментариев используют живую разговорную речь с конкретными деталями, что немного ослабляет гипотезу фейковых отзывов.",
+  "The bilingual slang detector found a visible share of hype-heavy comments that look more coordinated than conversational.": "Bilingual slang-детектор нашёл заметную долю хайповых комментариев, которые выглядят скорее скоординированными, чем естественными.",
+  "The slang detector also uses validation-calibrated weights and marketplace-aware lexicons, not only hand-written rules.": "Slang-детектор использует не только ручные правила, но и веса, откалиброванные на validation-наборе, а также marketplace-aware лексиконы.",
+  "The same slang-heavy language pattern appears in multiple reviews on this page.": "Одинаковый slang-паттерн встречается в нескольких отзывах на этой странице.",
+  "The language pattern looks hype-heavy and weakly grounded in real usage detail.": "Языковой паттерн выглядит хайповым и слабо привязанным к реальным деталям использования.",
+  "The review mixes Russian and English hype slang in a way that looks orchestrated rather than natural.": "Отзыв смешивает русский и английский hype-slang так, что это выглядит скорее срежиссированно, чем естественно.",
+  "The slang pattern looks unusually hype-driven for a natural customer comment.": "Slang-паттерн выглядит слишком hype-driven для естественного покупательского комментария.",
+  "The hybrid score falls inside the manual-review band.": "Гибридный скор попал в зону ручной проверки.",
+  "The model signals disagree too much for an automated decision.": "Сигналы модели слишком сильно расходятся для автоматического решения.",
+  "The review looks out-of-domain relative to the training corpus.": "Отзыв выглядит вне домена относительно обучающего корпуса.",
+  "Too little of the wording matches patterns seen during training.": "Слишком малая часть формулировок совпадает с паттернами, встречавшимися при обучении.",
+  "The raw text model and the hybrid fraud model disagree materially.": "Сырая текстовая модель и гибридная fraud-модель существенно расходятся.",
+  "The same IP address is associated with many accounts.": "Один и тот же IP-адрес связан со многими аккаунтами.",
+  "The rating happened in an unusual short-term burst.": "Оценка появилась в необычном краткосрочном всплеске активности.",
+  "The user posted several ratings in a short period.": "Пользователь оставил несколько оценок за короткий период.",
+  "The review text is duplicated across several ratings.": "Текст отзыва дублируется в нескольких оценках.",
+  "The rating strongly deviates from the normal score for this item.": "Оценка сильно отклоняется от обычного рейтинга этого товара.",
+  "The score is statistically unusual compared with other ratings for this item.": "Оценка статистически нетипична по сравнению с другими оценками этого товара.",
+  "The rating is extreme and paired with a very short review.": "Экстремальная оценка сопровождается очень коротким отзывом.",
+  "The wording uses promotional stock phrases that often appear in coordinated ratings.": "Формулировка использует рекламные шаблонные фразы, которые часто встречаются в скоординированных оценках.",
+  "OCR found sale, discount, coupon, promo, or similar marketing text on the photo.": "OCR нашёл на фото sale, discount, coupon, promo или похожий маркетинговый текст.",
+  "OCR found hype claims such as best product, best seller, top choice, or must buy.": "OCR нашёл хайповые заявления вроде best product, best seller, top choice или must buy.",
+  "OCR found ad, sponsored, official-store, or watermark-style text on the photo.": "OCR нашёл на фото текст в стиле рекламы, sponsored, official-store или watermark.",
+  "OCR found contact handles, social links, or store/domain text on the photo.": "OCR нашёл на фото контакты, социальные ссылки или текст магазина/домена.",
+  "Customer photos were extracted, but CLIP/ViT image-text alignment is not configured on this machine yet.": "Покупательские фото были извлечены, но CLIP/ViT-сопоставление изображения и текста на этой машине ещё не настроено.",
   "The customer photo evidence is reused across multiple reviews.": "Покупательское фото повторяется в нескольких отзывах.",
   "The same customer photo appears in a short time window across different authors.": "Одно и то же покупательское фото появилось у разных авторов за короткий промежуток времени.",
   "The attached customer photo does not match the review text or inferred product category.": "Прикрепленное фото не совпадает с текстом отзыва или предполагаемой категорией товара.",
@@ -91,7 +140,180 @@ function localizeKnownText(text: string, locale: Locale) {
   if (locale === "en") {
     return text;
   }
+  const dynamicTranslation = localizeDynamicKnownText(text);
+  if (dynamicTranslation) {
+    return dynamicTranslation;
+  }
   return knownTextTranslations[text] || text;
+}
+
+function localizeDynamicKnownText(text: string) {
+  const manualReviewMatch = text.match(
+    /^(\d+) review\(s\) were routed to manual review because the model saw uncertainty or out-of-domain patterns\.$/
+  );
+  if (manualReviewMatch) {
+    return `${manualReviewMatch[1]} отзыв(ов) отправлены на ручную проверку из-за неопределённости или out-of-domain паттернов.`;
+  }
+
+  const duplicatePhotoMatch = text.match(
+    /^Customer photo reuse was detected in (\d+) review\(s\); the largest shared-photo cluster spans (\d+) reviews\.$/
+  );
+  if (duplicatePhotoMatch) {
+    return `Повтор покупательских фото найден в ${duplicatePhotoMatch[1]} отзыв(ах); крупнейший shared-photo кластер охватывает ${duplicatePhotoMatch[2]} отзыв(ов).`;
+  }
+
+  const temporalPhotoMatch = text.match(
+    /^Coordinated photo timing was detected in (\d+) review\(s\): the same customer image appeared across different authors inside a ([\d.]+)-hour window\.$/
+  );
+  if (temporalPhotoMatch) {
+    return `Скоординированное время появления фото найдено в ${temporalPhotoMatch[1]} отзыв(ах): одно и то же покупательское изображение появилось у разных авторов в пределах ${temporalPhotoMatch[2]} часов.`;
+  }
+
+  const imageMismatchMatch = text.match(
+    /^Image-text alignment flagged (\d+) customer photo\(s\) as visually inconsistent with the review text or inferred product category\.$/
+  );
+  if (imageMismatchMatch) {
+    return `Image-text alignment отметил ${imageMismatchMatch[1]} покупательских фото как визуально несогласованные с текстом отзыва или предполагаемой категорией товара.`;
+  }
+
+  const stockPhotoMatch = text.match(
+    /^Stock\/marketing photo detection flagged (\d+) image\(s\) that look closer to catalog, studio, render, banner, or listing assets than user-taken snapshots\.$/
+  );
+  if (stockPhotoMatch) {
+    return `Детектор stock/marketing фото отметил ${stockPhotoMatch[1]} изображений, похожих скорее на каталог, студийный рендер, баннер или listing-ассет, чем на пользовательское фото.`;
+  }
+
+  const syntheticMatch = text.match(
+    /^AI\/synthetic image detection produced weak auxiliary hints on (\d+) image\(s\); this signal should support, not replace, human review or stronger fraud evidence\.$/
+  );
+  if (syntheticMatch) {
+    return `AI/synthetic image detector дал слабые вспомогательные сигналы по ${syntheticMatch[1]} изображению(ям); этот сигнал должен дополнять, а не заменять ручную проверку или более сильные fraud-доказательства.`;
+  }
+
+  const ocrMatch = text.match(
+    /^OCR found promo text, watermark-like text, contact handles, or marketplace branding on (\d+) customer photo\(s\)\.$/
+  );
+  if (ocrMatch) {
+    return `OCR нашёл promo-текст, watermark-подобный текст, контакты или marketplace branding на ${ocrMatch[1]} покупательских фото.`;
+  }
+
+  const topAuthorMatch = text.match(/^Top suspicious author cluster: (.+) with (\d+) flagged review\(s\)\.$/);
+  if (topAuthorMatch) {
+    return `Главный подозрительный кластер авторов: ${topAuthorMatch[1]}, ${topAuthorMatch[2]} отмеченных отзыв(ов).`;
+  }
+
+  const groundingMatch = text.match(/^Language grounding was calibrated against the inferred (.+) product domain\.$/);
+  if (groundingMatch) {
+    return `Language grounding откалиброван относительно предполагаемого домена товара: ${groundingMatch[1]}.`;
+  }
+
+  const slangTermsMatch = text.match(
+    /^The slang profile looks hype-heavy and weakly grounded in (.+) detail \((.+)\)\.$/
+  );
+  if (slangTermsMatch) {
+    return `Slang-профиль выглядит хайповым и слабо привязанным к деталям домена ${slangTermsMatch[1]} (${slangTermsMatch[2]}).`;
+  }
+
+  const slangDomainMatch = text.match(/^The slang profile looks hype-heavy and weakly grounded in (.+) detail\.$/);
+  if (slangDomainMatch) {
+    return `Slang-профиль выглядит хайповым и слабо привязанным к деталям домена ${slangDomainMatch[1]}.`;
+  }
+
+  const duplicatePhotoLargeMatch = text.match(
+    /^The same customer photo appears across a large cluster of (\d+) reviews\.$/
+  );
+  if (duplicatePhotoLargeMatch) {
+    return `Одно и то же покупательское фото встречается в большом кластере из ${duplicatePhotoLargeMatch[1]} отзывов.`;
+  }
+
+  const duplicatePhotoCountMatch = text.match(/^The same customer photo appears in (\d+) reviews\.$/);
+  if (duplicatePhotoCountMatch) {
+    return `Одно и то же покупательское фото встречается в ${duplicatePhotoCountMatch[1]} отзывах.`;
+  }
+
+  const temporalClusterMatch = text.match(
+    /^The same customer photo appears across (\d+) reviews by (\d+) authors within ([\d.]+) hours\.$/
+  );
+  if (temporalClusterMatch) {
+    return `Одно и то же покупательское фото встречается в ${temporalClusterMatch[1]} отзывах от ${temporalClusterMatch[2]} авторов за ${temporalClusterMatch[3]} часов.`;
+  }
+
+  const temporalShortWindowMatch = text.match(
+    /^The same customer photo appears across different authors within a short ([\d.]+)-hour window\.$/
+  );
+  if (temporalShortWindowMatch) {
+    return `Одно и то же покупательское фото встречается у разных авторов в коротком окне ${temporalShortWindowMatch[1]} часов.`;
+  }
+
+  const photoMismatchDetailMatch = text.match(
+    /^The customer photo looks closer to (.+) than to the review text or inferred (.+) category\.$/
+  );
+  if (photoMismatchDetailMatch) {
+    return `Покупательское фото больше похоже на ${photoMismatchDetailMatch[1]}, чем на текст отзыва или предполагаемую категорию ${photoMismatchDetailMatch[2]}.`;
+  }
+
+  const stockMarketingDetailMatch = text.match(
+    /^The customer image looks like (.+), not a user-taken product photo\.$/
+  );
+  if (stockMarketingDetailMatch) {
+    return `Покупательское изображение похоже на ${stockMarketingDetailMatch[1]}, а не на пользовательское фото товара.`;
+  }
+
+  const syntheticDetailMatch = text.match(
+    /^Weak auxiliary signal: the image shows (.+)\. Treat this as supporting evidence, not proof\.$/
+  );
+  if (syntheticDetailMatch) {
+    return `Слабый вспомогательный сигнал: изображение показывает ${syntheticDetailMatch[1]}. Это дополнительный сигнал, а не доказательство.`;
+  }
+
+  const suspiciousWordingMatch = text.match(
+    /^The wording matches suspicious slang terms: (.+)\.$/
+  );
+  if (suspiciousWordingMatch) {
+    return `Формулировка совпадает с подозрительными slang-терминами: ${suspiciousWordingMatch[1]}.`;
+  }
+
+  const slangToneMatch = text.match(
+    /^The slang-heavy tone contains little concrete (.+) detail\.$/
+  );
+  if (slangToneMatch) {
+    return `Slang-heavy тон содержит мало конкретных деталей домена ${slangToneMatch[1]}.`;
+  }
+
+  const learnedMarketplaceSlangMatch = text.match(
+    /^The wording matches suspicious slang patterns learned from (.+)-style reviews\.$/
+  );
+  if (learnedMarketplaceSlangMatch) {
+    return `Формулировка совпадает с подозрительными slang-паттернами, выученными на отзывах в стиле ${learnedMarketplaceSlangMatch[1]}.`;
+  }
+
+  const marketplaceHypeSlangMatch = text.match(
+    /^The comment uses hype-heavy (.+)-style slang but gives little grounded delivery or product detail\.$/
+  );
+  if (marketplaceHypeSlangMatch) {
+    return `Комментарий использует hype-heavy slang в стиле ${marketplaceHypeSlangMatch[1]}, но даёт мало конкретики о доставке или товаре.`;
+  }
+
+  const domainSpecificSlangMatch = text.match(
+    /^The slang-heavy tone contains little (.+)-specific detail, which can indicate scripted hype\.$/
+  );
+  if (domainSpecificSlangMatch) {
+    return `Slang-heavy тон содержит мало деталей, специфичных для ${domainSpecificSlangMatch[1]}, что может указывать на scripted hype.`;
+  }
+
+  const ocrForeignMarketplaceMatch = text.match(
+    /^OCR found marketplace text that does not match the source site: (.+)\.$/
+  );
+  if (ocrForeignMarketplaceMatch) {
+    return `OCR нашёл marketplace-текст, который не совпадает с исходным сайтом: ${ocrForeignMarketplaceMatch[1]}.`;
+  }
+
+  const ocrMarketplaceBrandMatch = text.match(/^OCR found marketplace branding text on the photo: (.+)\.$/);
+  if (ocrMarketplaceBrandMatch) {
+    return `OCR нашёл marketplace branding на фото: ${ocrMarketplaceBrandMatch[1]}.`;
+  }
+
+  return "";
 }
 
 function triageSeverity(

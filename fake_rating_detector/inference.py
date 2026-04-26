@@ -53,6 +53,9 @@ def predict_dataframe(df: pd.DataFrame, artifacts_dir: str | Path = "models") ->
     result_df = df.copy().reset_index(drop=True)
     slang_page_context = build_page_slang_profiles(result_df["review_text"].fillna("").tolist())
     slang_profiles = pd.DataFrame(slang_page_context["profiles"], index=result_df.index)
+    overlapping_slang_columns = [column for column in slang_profiles.columns if column in result_df.columns]
+    if overlapping_slang_columns:
+        result_df = result_df.drop(columns=overlapping_slang_columns)
     result_df = pd.concat([result_df, slang_profiles], axis=1)
     result_df["anomaly_score"] = scores
     result_df["is_suspicious"] = predictions
@@ -61,6 +64,11 @@ def predict_dataframe(df: pd.DataFrame, artifacts_dir: str | Path = "models") ->
         _merge_suspicion_reasons(base_reason_list, slang_profile)
         for base_reason_list, slang_profile in zip(base_reasons, slang_profiles.to_dict(orient="records"))
     ]
+    attack_type_frame = feature_frame.reset_index(drop=True).copy()
+    for column in slang_profiles.columns:
+        if column not in attack_type_frame.columns:
+            attack_type_frame[column] = slang_profiles[column].reset_index(drop=True)
+    result_df["attack_types"] = [_rating_attack_types(row) for row in attack_type_frame.to_dict(orient="records")]
 
     suspicious_users = (
         result_df.loc[result_df["is_suspicious"] == 1]
@@ -124,3 +132,35 @@ def _merge_suspicion_reasons(base_reasons: list[str], slang_profile: dict) -> li
     if slang_reason and slang_reason not in reasons:
         reasons.append(slang_reason)
     return reasons
+
+
+def _rating_attack_types(row: dict) -> list[str]:
+    """Return compact attack-type labels for one structured rating prediction."""
+    attack_types: list[str] = []
+
+    def add(value: str) -> None:
+        if value not in attack_types:
+            attack_types.append(value)
+
+    if float(row.get("ip_unique_users", 0.0) or 0.0) >= 4:
+        add("shared_ip_account_cluster")
+    if float(row.get("ip_ratings_last_1h", 0.0) or 0.0) >= 3:
+        add("short_term_ip_burst")
+    if float(row.get("user_ratings_last_24h", 0.0) or 0.0) >= 3:
+        add("reviewer_burst_activity")
+    if float(row.get("text_duplicate_count", 0.0) or 0.0) >= 3:
+        add("duplicated_review_text")
+    if float(row.get("rating_deviation_from_item_mean", 0.0) or 0.0) >= 1.8:
+        add("rating_distribution_shift")
+    if float(row.get("rating_zscore_item", 0.0) or 0.0) >= 2.0:
+        add("statistical_rating_outlier")
+    if float(row.get("short_review_flag", 0.0) or 0.0) >= 1.0 and float(row.get("extreme_rating_flag", 0.0) or 0.0) >= 1.0:
+        add("extreme_rating_low_evidence")
+    if float(row.get("promotional_phrase_flag", 0.0) or 0.0) >= 1.0:
+        add("promotional_template_language")
+    if float(row.get("slang_manipulation_score", 0.0) or 0.0) >= 0.55:
+        add("hype_heavy_slang")
+    if float(row.get("slang_template_dup_component", 0.0) or 0.0) >= 0.5:
+        add("repeated_slang_template")
+
+    return attack_types or ["low_risk_or_insufficient_signal"]

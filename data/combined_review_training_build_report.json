@@ -1,19 +1,44 @@
 {
   "output_path": "data\\combined_review_training.csv",
-  "records_total": 46692,
+  "records_total": 15341,
+  "split_group_count": 10838,
+  "holdout_group_count": 96,
+  "synthetic_hard_negative_records": 1331,
   "label_distribution": {
-    "0": 32653,
-    "1": 14039
+    "0": 9389,
+    "1": 5952
   },
   "source_distribution": {
-    "amazon_reviews_2023:raw_review_All_Beauty": 19737,
-    "synthetic_suspicious_augmented": 13039,
-    "grammar_product_reviews": 2988,
-    "recipe_reviews_zip": 2983,
-    "turkish_user_reviews": 2980,
-    "uci_recipe_reviews_911": 2467,
-    "uci_travel_review_ratings_485": 1498,
-    "synthetic_suspicious_template": 1000
+    "synthetic_suspicious_augmented": 4503,
+    "grammar_product_reviews": 1995,
+    "recipe_reviews_zip": 1993,
+    "turkish_user_reviews": 1989,
+    "uci_recipe_reviews_911": 1764,
+    "synthetic_suspicious_template": 1449,
+    "uci_travel_review_ratings_485": 1134,
+    "synthetic_normal_template": 514
+  },
+  "product_family_distribution": {
+    "food_recipe": 5574,
+    "general": 2840,
+    "travel": 1686,
+    "parf_m": 810,
+    "cep_telefonu": 809,
+    "usb": 526,
+    "gaming_headset": 285,
+    "led_desk_lamp": 282,
+    "televi_zyon": 276,
+    "power_bank": 272,
+    "phone_case": 270,
+    "vacuum_cleaner": 270,
+    "wireless_mouse": 264,
+    "coffee_machine": 264,
+    "kitchen_blender": 255,
+    "ay_maki_nesi": 208,
+    "kulaklik": 178,
+    "modem": 170,
+    "local_business": 70,
+    "bi_lgi_sayar": 32
   },
   "source_reports": [
     {
@@ -21,21 +46,21 @@
       "path": "C:\\Users\\User\\Downloads\\GrammarandProductReviews.zip",
       "status": "loaded",
       "records_raw": 71044,
-      "records_used": 3000
+      "records_used": 2000
     },
     {
       "source": "recipe_reviews_zip",
       "path": "C:\\Users\\User\\Downloads\\recipe+reviews+and+user+feedback+dataset.zip",
       "status": "loaded",
       "records_raw": 18182,
-      "records_used": 3000
+      "records_used": 2000
     },
     {
       "source": "turkish_user_reviews",
       "path": "C:\\Users\\User\\Downloads\\turkish+user+review+dataset.zip",
       "status": "loaded",
       "records_raw": 34284,
-      "records_used": 3000
+      "records_used": 2000
     },
     {
       "source": "amazon_commerce_reviews_set",
@@ -52,39 +77,13 @@
       "source": "uci_recipe_reviews_911",
       "status": "loaded",
       "records_raw": 18182,
-      "records_used": 3000
+      "records_used": 2000
     },
     {
       "source": "uci_travel_review_ratings_485",
       "status": "loaded",
       "records_raw": 5456,
-      "records_used": 3000
-    },
-    {
-      "source": "amazon_reviews_2023",
-      "repo_id": "McAuley-Lab/Amazon-Reviews-2023",
-      "config": "raw_review_All_Beauty",
-      "split": "full",
-      "status": "loaded",
-      "records_raw": 20166,
-      "records_used": 20000
-    },
-    {
-      "source": "yelp_open_dataset",
-      "path": "C:\\Users\\User\\Downloads\\yelp_academic_dataset_review.json",
-      "resolved_path": null,
-      "status": "missing",
-      "records_raw": 0,
-      "records_used": 0,
-      "reason": "Yelp review JSON file was not found."
-    },
-    {
-      "source": "yelpnyc_labeled_reviews",
-      "path": "C:\\Users\\User\\Downloads\\YelpNYC.csv",
-      "status": "missing",
-      "records_raw": 0,
-      "records_used": 0,
-      "reason": "YelpNYC file was not found. The official labeled dataset is provided by request."
+      "records_used": 2000
     }
   ]
 }

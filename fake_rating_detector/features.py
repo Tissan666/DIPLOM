@@ -57,6 +57,17 @@ class FeatureEngineeringPipeline:
         self.text_reducer: TruncatedSVD | None = None
         self.text_embedding_active_dim = 0
 
+    def __setstate__(self, state: dict) -> None:
+        """Restore older persisted pipelines that predate text-embedding fields."""
+        self.__dict__.update(state)
+        self.text_embedding_dim = int(getattr(self, "text_embedding_dim", 0))
+        self.text_max_features = int(getattr(self, "text_max_features", 2500))
+        self.text_char_max_features = int(getattr(self, "text_char_max_features", 0))
+        self.random_state = int(getattr(self, "random_state", 42))
+        self.text_vectorizer = getattr(self, "text_vectorizer", None)
+        self.text_reducer = getattr(self, "text_reducer", None)
+        self.text_embedding_active_dim = int(getattr(self, "text_embedding_active_dim", 0))
+
     def fit(self, df: pd.DataFrame) -> "FeatureEngineeringPipeline":
         """Fit lookup tables on historical rating data."""
         frame = df.copy()

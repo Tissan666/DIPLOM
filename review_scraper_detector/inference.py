@@ -349,6 +349,23 @@ def _build_review_predictions(
                 image_ocr_labels=list(row.get("image_ocr_labels", []) or []),
                 image_ocr_reasons=list(row.get("image_ocr_reasons", []) or []),
                 detected_slang_terms=list(row.get("slang_terms", []) or []),
+                suspicion_categories=_build_suspicion_categories(
+                    text=review_text,
+                    rating=float(row.get("rating", 0.0) or 0.0),
+                    probability=probability,
+                    manipulation_score=float(row.get("rating_manipulation_score", 0.0) or 0.0),
+                    author_risk_score=float(row.get("author_risk_score", 0.0) or 0.0),
+                    slang_manipulation_score=float(row.get("slang_manipulation_score", 0.0) or 0.0),
+                    duplicate_image_score=float(row.get("duplicate_image_score", 0.0) or 0.0),
+                    image_temporal_cluster_flag=int(row.get("image_temporal_cluster_flag", 0) or 0),
+                    image_text_mismatch_flag=int(row.get("image_text_mismatch_flag", 0) or 0),
+                    image_stock_marketing_flag=int(row.get("image_stock_marketing_flag", 0) or 0),
+                    image_synthetic_flag=int(row.get("image_synthetic_flag", 0) or 0),
+                    image_ocr_flag=int(row.get("image_ocr_flag", 0) or 0),
+                    triage_label=str(row.get("triage_label", "") or ""),
+                    uncertainty_score=float(row.get("uncertainty_score", 0.0) or 0.0),
+                    ood_score=float(row.get("ood_score", 0.0) or 0.0),
+                ),
                 suspicion_reasons=_build_suspicion_reasons(
                     text=review_text,
                     rating=float(row.get("rating", 0.0) or 0.0),
@@ -689,6 +706,69 @@ def _build_suspicion_reasons(
             reasons.append(reason)
 
     return reasons
+
+
+def _build_suspicion_categories(
+    text: str,
+    rating: float,
+    probability: float,
+    manipulation_score: float,
+    author_risk_score: float,
+    slang_manipulation_score: float,
+    duplicate_image_score: float,
+    image_temporal_cluster_flag: int,
+    image_text_mismatch_flag: int,
+    image_stock_marketing_flag: int,
+    image_synthetic_flag: int,
+    image_ocr_flag: int,
+    triage_label: str,
+    uncertainty_score: float,
+    ood_score: float,
+) -> list[str]:
+    """Return compact attack-type labels for downstream dashboards and reports."""
+    categories: list[str] = []
+    normalized_text = normalize_whitespace(text).lower()
+    word_count = len(normalized_text.split())
+
+    def add(category: str) -> None:
+        if category not in categories:
+            categories.append(category)
+
+    if probability >= 0.60:
+        add("neural_text_suspicion")
+    if word_count < 8 or len(set(normalized_text.split())) < max(3, word_count // 2):
+        add("low_detail_or_repetitive_text")
+    if normalized_text.count("!") >= 3 or any(
+        phrase in normalized_text
+        for phrase in ["buy now", "100% recommended", "best purchase ever", "trust me", "must buy"]
+    ):
+        add("promotional_template_language")
+    if rating in {1.0, 5.0} and word_count < 15:
+        add("extreme_rating_low_evidence")
+    if manipulation_score >= 0.55:
+        add("page_behavior_manipulation")
+    if author_risk_score >= 0.45:
+        add("reviewer_cluster_anomaly")
+    if slang_manipulation_score >= 0.55:
+        add("hype_heavy_slang")
+    if duplicate_image_score >= 0.45:
+        add("photo_reuse")
+    if image_temporal_cluster_flag:
+        add("coordinated_photo_timing")
+    if image_text_mismatch_flag:
+        add("photo_text_mismatch")
+    if image_stock_marketing_flag:
+        add("stock_or_catalog_photo")
+    if image_synthetic_flag:
+        add("synthetic_image_hint")
+    if image_ocr_flag:
+        add("photo_ocr_promo_signal")
+    if triage_label == "needs_manual_review" or uncertainty_score >= 0.45:
+        add("manual_review_uncertainty")
+    if ood_score >= 0.45:
+        add("out_of_domain_language")
+
+    return categories or ["low_risk_or_insufficient_signal"]
 
 
 def analyze_site_rating_records(records: list[dict], artifacts_dir: str | Path = "models") -> dict:

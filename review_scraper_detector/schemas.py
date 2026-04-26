@@ -69,6 +69,7 @@ class ReviewPrediction:
     image_ocr_labels: list[str] = field(default_factory=list)
     image_ocr_reasons: list[str] = field(default_factory=list)
     detected_slang_terms: list[str] = field(default_factory=list)
+    suspicion_categories: list[str] = field(default_factory=list)
     suspicion_reasons: list[str] = field(default_factory=list)
     manual_review_reasons: list[str] = field(default_factory=list)
 

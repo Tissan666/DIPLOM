@@ -14,7 +14,7 @@ import random
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 from .parsing import parse_reviews_from_html
 from .utils import ensure_directory, normalize_whitespace
@@ -168,24 +168,68 @@ class ReviewCollector:
             host_markers=("aliexpress.", "aliexpress.ru"),
             reviews_tab_selectors=(
                 "a[href*='review']",
+                "a[href*='feedback']",
+                "a[href*='evaluation']",
+                "a[href*='reviews']",
+                "[data-pl*='review']",
+                "[data-pl*='feedback']",
+                "[data-spm*='review']",
+                "[data-spm*='feedback']",
                 "button:has-text('Отзывы')",
                 "a:has-text('Отзывы')",
+                "button:has-text('Отзывы покупателей')",
+                "a:has-text('Отзывы покупателей')",
                 "button:has-text('Reviews')",
                 "a:has-text('Reviews')",
+                "button:has-text('Customer Reviews')",
+                "a:has-text('Customer Reviews')",
+                "button:has-text('Buyer Reviews')",
+                "a:has-text('Buyer Reviews')",
             ),
             show_more_selectors=(
                 "button:has-text('Show more')",
+                "a:has-text('Show more')",
+                "button:has-text('View more')",
+                "a:has-text('View more')",
+                "button:has-text('See more')",
+                "a:has-text('See more')",
                 "button:has-text('Показать ещё')",
                 "button:has-text('Показать еще')",
+                "a:has-text('Показать ещё')",
+                "a:has-text('Показать еще')",
                 "button:has-text('More')",
+                "[class*='pagination'] button",
+                "[class*='next']",
+                "button[aria-label*='next']",
+                "button[aria-label*='Next']",
             ),
             review_container_selectors=(
+                "[class*='feedback-item']",
+                "[class*='feedback-list']",
                 "[class*='feedback']",
+                "[class*='review-item']",
+                "[class*='review-list']",
                 "[class*='review']",
+                "[class*='evaluation']",
                 "[class*='comment']",
                 "[data-pl*='review']",
+                "[data-pl*='feedback']",
+                "[data-spm*='review']",
+                "[data-spm*='feedback']",
             ),
-            review_api_keywords=("review", "reviews", "feedback", "buyer", "evaluation"),
+            review_api_keywords=(
+                "review",
+                "reviews",
+                "feedback",
+                "buyer",
+                "evaluation",
+                "productevaluation",
+                "getreview",
+                "comments",
+                "rating",
+                "mtop",
+                "ae.detail",
+            ),
             empty_markers=("no reviews", "нет отзывов"),
         ),
     ]
@@ -394,6 +438,10 @@ class ReviewCollector:
                 "width": self.config.viewport_width,
                 "height": self.config.viewport_height,
             },
+            "extra_http_headers": {
+                "Accept-Language": _accept_language_header(self.config.locale),
+            },
+            "ignore_https_errors": True,
         }
         if self.config.user_agent:
             kwargs["user_agent"] = self.config.user_agent
@@ -759,6 +807,17 @@ def _safe_filename(value: str) -> str:
     return cleaned.strip("_") or "reviews"
 
 
+def _accept_language_header(locale: str) -> str:
+    """Build a normal browser Accept-Language header from a Playwright locale."""
+    normalized = (locale or "ru-RU").strip() or "ru-RU"
+    language = normalized.split("-", 1)[0].lower()
+    fallbacks = {
+        "ru": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+        "en": "en-US,en;q=0.9,ru-RU;q=0.7,ru;q=0.6",
+    }
+    return fallbacks.get(language, f"{normalized},{language};q=0.9,en-US;q=0.8,en;q=0.7")
+
+
 def _navigation_url_variants(url: str) -> list[str]:
     """Return conservative URL variants that still point to public product pages."""
     parsed = urlparse(url)
@@ -774,8 +833,17 @@ def _navigation_url_variants(url: str) -> list[str]:
     netloc = parsed.netloc
     path = parsed.path or "/"
 
-    if hostname and not hostname.startswith("www.") and "aliexpress" in hostname:
-        add(parsed._replace(netloc=f"www.{netloc}").geturl())
+    if "aliexpress" in hostname:
+        for fragment in ("nav-review", "feedback", "reviews"):
+            add(parsed._replace(fragment=fragment).geturl())
+
+        query_items = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        if "gatewayAdapt" not in query_items:
+            adapted_query = urlencode({**query_items, "gatewayAdapt": "glo2rus"})
+            add(parsed._replace(query=adapted_query).geturl())
+
+        if hostname and not hostname.startswith("www."):
+            add(parsed._replace(netloc=f"www.{netloc}").geturl())
 
     if "aliexpress" in hostname and "/reviews" in path:
         product_path = path.replace("/reviews", "").rstrip("/") or "/"
@@ -884,6 +952,8 @@ def collect_reviews_sync(
             timezone_id=config.timezone_id,
             viewport={"width": config.viewport_width, "height": config.viewport_height},
             user_agent=config.user_agent,
+            extra_http_headers={"Accept-Language": _accept_language_header(config.locale)},
+            ignore_https_errors=True,
         )
         page = context.new_page()
 
@@ -1199,7 +1269,27 @@ def _review_from_dict(node: dict[str, Any], source_url: str, marketplace: str) -
     """Convert a review-like JSON object into a normalized record."""
     text_parts = [
         _stringify_review_text_value(
-            _get_first_value(node, ["review_text", "reviewText", "text", "comment", "content", "message", "feedbackText"])
+            _get_first_value(
+                node,
+                [
+                    "review_text",
+                    "reviewText",
+                    "text",
+                    "comment",
+                    "commentContent",
+                    "content",
+                    "message",
+                    "feedback",
+                    "feedbackText",
+                    "feedbackContent",
+                    "buyerFeedback",
+                    "buyerFeedbackText",
+                    "buyerTranslationFeedback",
+                    "translationFeedback",
+                    "reviewContent",
+                    "evaluationContent",
+                ],
+            )
         ),
         _stringify_review_text_value(_get_first_value(node, ["pros", "advantages", "positiveText", "positive"])),
         _stringify_review_text_value(_get_first_value(node, ["cons", "disadvantages", "negativeText", "negative"])),
@@ -1208,15 +1298,65 @@ def _review_from_dict(node: dict[str, Any], source_url: str, marketplace: str) -
     if len(text) < 15:
         return None
 
-    rating = _coerce_float(_get_first_value(node, ["rating", "rate", "stars", "valuation", "grade", "score"]))
+    rating = _coerce_float(
+        _get_first_value(
+            node,
+            [
+                "rating",
+                "rate",
+                "stars",
+                "star",
+                "starRating",
+                "valuation",
+                "grade",
+                "score",
+                "buyerEval",
+                "evalStar",
+                "feedbackRating",
+            ],
+        )
+    )
     author = _get_first_value(
         node,
-        ["author", "authorName", "userName", "username", "nickname", "customerName", "buyerName", "name"],
+        [
+            "author",
+            "authorName",
+            "userName",
+            "username",
+            "nickname",
+            "customerName",
+            "buyerName",
+            "buyerLoginId",
+            "buyerNick",
+            "userNick",
+            "displayName",
+            "memberName",
+            "name",
+        ],
     )
     if isinstance(author, dict):
-        author = _get_first_value(author, ["name", "nickname", "userName", "displayName"])
+        author = _get_first_value(author, ["name", "nickname", "userName", "displayName", "loginId"])
     author = normalize_whitespace(str(author or ""))
-    date = normalize_whitespace(str(_get_first_value(node, ["date", "createdAt", "created_at", "publishedAt", "time"]) or ""))
+    date = normalize_whitespace(
+        str(
+            _get_first_value(
+                node,
+                [
+                    "date",
+                    "createdAt",
+                    "created_at",
+                    "publishedAt",
+                    "time",
+                    "feedbackDate",
+                    "gmtCreate",
+                    "evalDate",
+                    "createdDate",
+                    "createTime",
+                ],
+            )
+            or ""
+        )
+    )
 
     normalized_keys = {_normalize_key(key) for key in node.keys()}
     review_markers = {
@@ -1224,10 +1364,17 @@ def _review_from_dict(node: dict[str, Any], source_url: str, marketplace: str) -
         "reviewtext",
         "feedback",
         "feedbacktext",
+        "feedbackcontent",
+        "buyerfeedback",
+        "buyerfeedbacktext",
         "comment",
+        "commentcontent",
         "evaluation",
+        "evaluationcontent",
         "evaluationid",
         "buyername",
+        "buyerloginid",
+        "buyernick",
         "customername",
     }
     if rating <= 0.0 and not author and not date and not (normalized_keys & review_markers):
@@ -1235,14 +1382,14 @@ def _review_from_dict(node: dict[str, Any], source_url: str, marketplace: str) -
     if rating <= 0.0 and _looks_like_product_variant_text(text):
         return None
 
-    photos = _get_first_value(node, ["photos", "images", "media", "pictures"])
+    photos = _get_first_value(node, ["photos", "images", "media", "pictures", "buyerPictures", "feedbackImages", "imageList", "picList"])
     photos_count = len(photos) if isinstance(photos, list) else 0
 
     return CollectedReview(
         source_url=source_url,
         marketplace=marketplace,
         author=author,
-        title=normalize_whitespace(str(_get_first_value(node, ["title", "subject", "summary"]) or "")),
+        title=normalize_whitespace(str(_get_first_value(node, ["title", "subject", "summary", "skuInfo", "productTitle"]) or "")),
         rating=float(rating or 0.0),
         date=date,
         review_text=text,
@@ -1286,6 +1433,13 @@ def _stringify_review_text_value(value: Any) -> str:
         preferred_keys = [
             "text",
             "content",
+            "feedback",
+            "feedbackText",
+            "feedbackContent",
+            "buyerFeedback",
+            "buyerFeedbackText",
+            "reviewContent",
+            "commentContent",
             "message",
             "value",
             "title",
@@ -1352,9 +1506,28 @@ def _extract_json_objects_from_text(text: str) -> list[Any]:
     candidates = []
     if stripped.startswith("{") or stripped.startswith("["):
         candidates.append(stripped)
-    for marker in ("window.__INITIAL_STATE__=", "window.__NUXT__=", "window.__APOLLO_STATE__="):
+    script_json_markers = (
+        "window.__INITIAL_STATE__=",
+        "window.__INITIAL_STATE__ =",
+        "window.__NUXT__=",
+        "window.__NUXT__ =",
+        "window.__APOLLO_STATE__=",
+        "window.__APOLLO_STATE__ =",
+        "window.__INITIAL_DATA__=",
+        "window.__INITIAL_DATA__ =",
+        "window.__INIT_DATA__=",
+        "window.__INIT_DATA__ =",
+        "window.runParams=",
+        "window.runParams =",
+        "runParams=",
+        "runParams =",
+        "data: {",
+    )
+    for marker in script_json_markers:
         if marker in stripped:
             candidate = stripped.split(marker, 1)[1].split("</script>", 1)[0].strip().rstrip(";")
+            if marker == "data: {":
+                candidate = "{" + candidate
             candidates.append(candidate)
 
     parsed: list[Any] = []
