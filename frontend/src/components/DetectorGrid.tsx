@@ -1,5 +1,20 @@
 import { motion } from "framer-motion";
-import { Activity, AlertTriangle, Radar, ShieldQuestion } from "lucide-react";
+import {
+  AlertTriangle,
+  BarChart3,
+  Bot,
+  Clock3,
+  FileSearch,
+  Fingerprint,
+  Gauge,
+  ImageOff,
+  Languages,
+  MessageSquareText,
+  ScanSearch,
+  ShieldQuestion,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 import { useLocale } from "../i18n";
 import type { AppStatus, DetectorCardData } from "../types/analysis";
 
@@ -13,12 +28,12 @@ export function DetectorGrid({ detectors, status }: DetectorGridProps) {
   const showPlaceholder = status !== "success" || detectors.length === 0;
 
   return (
-    <section className="section-wrap py-5">
-      <div className="surface-card p-6 sm:p-7">
+    <section className="section-wrap py-6">
+      <div className="surface-card p-6 sm:p-8">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="eyebrow">{copy.detectorGrid.eyebrow}</p>
-            <h2 className="mt-3 font-display text-3xl text-ink">{copy.detectorGrid.title}</h2>
+            <h2 className="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{copy.detectorGrid.title}</h2>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">{copy.detectorGrid.description}</p>
           </div>
           <span className="badge-soft">
@@ -50,17 +65,11 @@ export function DetectorGrid({ detectors, status }: DetectorGridProps) {
                 viewport={{ once: true, amount: 0.2 }}
                 transition={{ duration: 0.35, delay: index * 0.05 }}
                 whileHover={{ y: -4 }}
-                className="surface-card-soft group p-5"
+                className="product-card product-card-hover group p-5"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <span className="rounded-2xl bg-white/90 p-2.5 text-ink shadow-sm">
-                    {detector.status === "critical" ? (
-                      <AlertTriangle className="h-4 w-4 text-danger" />
-                    ) : detector.status === "watch" ? (
-                      <Radar className="h-4 w-4 text-warning" />
-                    ) : (
-                      <Activity className="h-4 w-4 text-accent" />
-                    )}
+                  <span className="icon-shell bg-white/90 text-ink">
+                    {renderDetectorIcon(detector)}
                   </span>
                   <span className={`badge-soft ${severityClass(detector.severity)}`}>
                     {localizeSeverity(detector.severity, locale)}
@@ -117,6 +126,59 @@ function localizeDetectorStatus(status: DetectorCardData["status"], locale: "en"
   }
 
   return status;
+}
+
+function renderDetectorIcon(detector: DetectorCardData) {
+  const Icon = detectorIcon(detector);
+  return <Icon className={`h-6 w-6 ${detectorIconClass(detector)}`} />;
+}
+
+function detectorIcon(detector: DetectorCardData): LucideIcon {
+  const id = detector.id.toLowerCase();
+  if (id.includes("ai-text")) {
+    return Bot;
+  }
+  if (id.includes("text-similarity")) {
+    return Fingerprint;
+  }
+  if (id.includes("burst") || id.includes("temporal")) {
+    return Clock3;
+  }
+  if (id.includes("reviewer") || id.includes("user") || id.includes("author")) {
+    return UsersRound;
+  }
+  if (id.includes("rating")) {
+    return BarChart3;
+  }
+  if (id.includes("sentiment")) {
+    return MessageSquareText;
+  }
+  if (id.includes("slang") || id.includes("bilingual")) {
+    return Languages;
+  }
+  if (id.includes("ocr") || id.includes("alignment")) {
+    return ScanSearch;
+  }
+  if (id.includes("synthetic") || id.includes("stock") || id.includes("photo")) {
+    return ImageOff;
+  }
+  if (id.includes("uncertainty")) {
+    return Gauge;
+  }
+  if (detector.status === "critical") {
+    return AlertTriangle;
+  }
+  return FileSearch;
+}
+
+function detectorIconClass(detector: DetectorCardData) {
+  if (detector.status === "critical") {
+    return "text-danger";
+  }
+  if (detector.status === "watch") {
+    return "text-warning";
+  }
+  return "text-accent";
 }
 
 function localizeSeverity(severity: DetectorCardData["severity"], locale: "en" | "ru") {

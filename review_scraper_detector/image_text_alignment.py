@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import base64
 import io
 import os
 from functools import lru_cache
-from pathlib import Path
 from urllib.parse import urlparse
 
 import numpy as np
@@ -14,6 +12,7 @@ import pandas as pd
 import requests
 
 from .image_signals import normalize_image_urls
+from .safe_urls import decode_data_image, is_safe_image_source
 from .utils import normalize_whitespace
 
 DEFAULT_CLIP_MODEL = "openai/clip-vit-base-patch32"
@@ -300,6 +299,75 @@ def _alignment_enabled() -> bool:
     return raw_value not in {"0", "false", "no", "off"}
 
 
+@lru_cache(maxsize=1)
+def image_alignment_capability_status() -> dict:
+    """Return lightweight CLIP/ViT readiness diagnostics for health checks."""
+    model_name = os.getenv("REVIEW_IMAGE_ALIGNMENT_MODEL", DEFAULT_CLIP_MODEL)
+    local_only = os.getenv("REVIEW_IMAGE_ALIGNMENT_LOCAL_ONLY", "0").strip().lower() in {"1", "true", "yes"}
+    load_model = os.getenv("REVIEW_IMAGE_ALIGNMENT_HEALTH_LOAD", "0").strip().lower() in {"1", "true", "yes"}
+
+    if not _alignment_enabled():
+        return {
+            "enabled": False,
+            "available": False,
+            "status": "disabled",
+            "model_name": model_name,
+            "local_only": local_only,
+            "model_load_checked": False,
+        }
+
+    try:
+        from PIL import Image  # noqa: F401
+        from transformers import CLIPModel, CLIPProcessor  # noqa: F401
+        import torch
+    except ImportError as exc:
+        return {
+            "enabled": True,
+            "available": False,
+            "status": "not_configured",
+            "model_name": model_name,
+            "local_only": local_only,
+            "model_load_checked": False,
+            "detail": str(exc),
+        }
+
+    device = "cuda" if torch.cuda.is_available() and os.getenv("REVIEW_IMAGE_ALIGNMENT_DEVICE", "auto") != "cpu" else "cpu"
+    if not load_model:
+        return {
+            "enabled": True,
+            "available": True,
+            "status": "dependencies_ready",
+            "model_name": model_name,
+            "local_only": local_only,
+            "model_load_checked": False,
+            "device": device,
+        }
+
+    try:
+        _model, _processor, _image_cls, _torch_module, loaded_device = _load_clip_components(model_name)
+    except Exception as exc:
+        return {
+            "enabled": True,
+            "available": False,
+            "status": "model_unavailable",
+            "model_name": model_name,
+            "local_only": local_only,
+            "model_load_checked": True,
+            "device": device,
+            "detail": str(exc),
+        }
+
+    return {
+        "enabled": True,
+        "available": True,
+        "status": "ready",
+        "model_name": model_name,
+        "local_only": local_only,
+        "model_load_checked": True,
+        "device": loaded_device,
+    }
+
+
 @lru_cache(maxsize=2)
 def _load_clip_components(model_name: str):
     from PIL import Image
@@ -318,19 +386,19 @@ def _load_clip_components(model_name: str):
 def _load_image(url: str, image_cls: object, timeout_seconds: float):
     try:
         raw_url = url.strip()
+        if not is_safe_image_source(raw_url):
+            return None
         parsed = urlparse(raw_url)
         if raw_url.startswith("data:image"):
-            _, encoded = raw_url.split(",", 1)
-            image_bytes = base64.b64decode(encoded)
+            image_bytes = decode_data_image(raw_url, max_bytes=MAX_IMAGE_BYTES)
+            if image_bytes is None:
+                return None
         elif parsed.scheme in {"http", "https"}:
             response = requests.get(raw_url, timeout=timeout_seconds, headers={"User-Agent": "review-image-alignment/1.0"})
             response.raise_for_status()
             image_bytes = response.content[:MAX_IMAGE_BYTES]
         else:
-            path = Path(parsed.path if parsed.scheme == "file" else raw_url)
-            if not path.exists() or path.stat().st_size > MAX_IMAGE_BYTES:
-                return None
-            image_bytes = path.read_bytes()
+            return None
         image = image_cls.open(io.BytesIO(image_bytes))
         converted = image.convert("RGB")
         converted.info.update(getattr(image, "info", {}) or {})

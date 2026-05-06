@@ -1,8 +1,7 @@
 import { motion } from "framer-motion";
-import { Braces, CheckCircle2, Database, Link2, Play, Upload } from "lucide-react";
+import { CheckCircle2, Database, Link2, Play, Upload } from "lucide-react";
 import { useDataImport } from "../../hooks/useDataImport";
 import { useLocale } from "../../i18n";
-import { expectedStructureLabel } from "../../lib/dataImport";
 import { DataPreviewTable } from "./DataPreviewTable";
 import { ErrorState } from "./ErrorState";
 import { FileDropZone } from "./FileDropZone";
@@ -52,13 +51,13 @@ export function DataImportPanel({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-[24px] border border-slate-200/80 bg-white/80 p-5 shadow-float">
+      <div className="product-card p-5 shadow-soft">
         <div className="flex items-start gap-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent">
-            <Database className="h-5 w-5" />
+          <span className="icon-shell border-accent/20 bg-accent-soft text-accent">
+            <Database className="h-6 w-6" />
           </span>
           <div className="min-w-0">
-            <p className="text-base font-semibold text-ink">{copy.dataImport.title}</p>
+            <p className="text-base font-bold text-ink">{copy.dataImport.title}</p>
             <p className="mt-1 text-sm leading-7 text-muted">{copy.dataImport.description}</p>
           </div>
         </div>
@@ -67,25 +66,15 @@ export function DataImportPanel({
           <SourceTabs activeTab={activeTab} onChange={setActiveTab} />
         </div>
 
-        <div className="mt-5 rounded-[24px] border border-slate-200/70 bg-slate-50/70 p-4">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-            <Braces className="h-4 w-4 text-accent" />
-            {copy.dataImport.expectedStructure}
-          </div>
-          <p className="mt-3 rounded-2xl border border-slate-200/70 bg-white/90 px-4 py-3 font-mono text-[12px] leading-6 text-ink">
-            {expectedStructureLabel()}
-          </p>
-        </div>
-
         <div className="mt-5">
           {activeTab === "api" ? (
-            <div className="rounded-[24px] border border-slate-200/80 bg-white/80 p-5">
+            <div className="product-card p-5">
               <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent-soft text-accent">
-                  <Link2 className="h-4 w-4" />
+                <span className="icon-shell h-11 w-11 border-accent/20 bg-accent-soft text-accent">
+                  <Link2 className="h-5 w-5" />
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-ink">{copy.dataImport.fetchTitle}</p>
+                  <p className="text-sm font-bold text-ink">{copy.dataImport.fetchTitle}</p>
                   <p className="mt-1 text-sm leading-7 text-muted">{copy.dataImport.fetchDescription}</p>
                 </div>
               </div>
@@ -102,7 +91,7 @@ export function DataImportPanel({
                   type="button"
                   disabled={disabled || status === "loading"}
                   onClick={handleApiImport}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="primary-button justify-center px-5 py-3"
                 >
                   <Upload className="h-4 w-4" />
                   {copy.dataImport.fetchAction}
@@ -111,7 +100,6 @@ export function DataImportPanel({
             </div>
           ) : (
             <FileDropZone
-              activeTab={activeTab}
               isDragging={isDragging}
               disabled={disabled || status === "loading"}
               onDragStateChange={setIsDragging}
@@ -135,7 +123,7 @@ export function DataImportPanel({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.32 }}
-            className="rounded-[24px] border border-slate-200/80 bg-white/85 p-5"
+            className="product-card p-5"
           >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
@@ -143,7 +131,7 @@ export function DataImportPanel({
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     {copy.common.sourceLoaded}
                   </div>
-                  <p className="mt-3 text-base font-semibold text-ink">{effectiveMeta.sourceName}</p>
+                  <p className="mt-3 text-base font-bold text-ink">{effectiveMeta.sourceName}</p>
                   <p className="mt-1 text-sm leading-7 text-muted">
                     {effectiveMeta.result.records.length} {copy.common.rows}, {effectiveMeta.sizeLabel}
                   </p>
@@ -152,7 +140,7 @@ export function DataImportPanel({
                 <button
                   type="button"
                   onClick={clearImport}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:border-danger/20 hover:text-danger"
+                  className="secondary-button justify-center px-4 py-2.5 hover:border-danger/20 hover:text-danger"
                   >
                   {copy.common.clear}
                 </button>
@@ -160,7 +148,7 @@ export function DataImportPanel({
                   type="button"
                   disabled={disabled || validationState === "error"}
                   onClick={onRunAnalysis}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="primary-button justify-center px-5 py-2.5"
                 >
                   <Play className="h-4 w-4" />
                   {copy.dataImport.runAnalysis}

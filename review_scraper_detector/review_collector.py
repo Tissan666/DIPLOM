@@ -11,12 +11,14 @@ import asyncio
 import csv
 import json
 import random
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse
 
 from .parsing import parse_reviews_from_html
+from .safe_urls import normalize_safe_image_url
 from .utils import ensure_directory, normalize_whitespace
 
 
@@ -78,6 +80,7 @@ class CollectedReview:
     date: str
     review_text: str
     photos_count: int = 0
+    image_urls: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -103,6 +106,12 @@ class MarketplaceAdapter:
     reviews_tab_selectors: tuple[str, ...] = ()
     show_more_selectors: tuple[str, ...] = ()
     review_container_selectors: tuple[str, ...] = ()
+    author_selectors: tuple[str, ...] = ()
+    title_selectors: tuple[str, ...] = ()
+    text_selectors: tuple[str, ...] = ()
+    rating_selectors: tuple[str, ...] = ()
+    date_selectors: tuple[str, ...] = ()
+    photo_selectors: tuple[str, ...] = ()
     spinner_selectors: tuple[str, ...] = ()
     review_api_keywords: tuple[str, ...] = ()
     empty_markers: tuple[str, ...] = ()
@@ -134,6 +143,22 @@ class ReviewCollector:
                 "[class*='review']",
                 "[data-testid*='feedback']",
             ),
+            author_selectors=(
+                "[class*='feedback__user']",
+                "[class*='feedback__username']",
+                "[class*='user-name']",
+                "[class*='author']",
+            ),
+            title_selectors=("[class*='feedback__title']", "[class*='review__title']"),
+            text_selectors=(
+                "[class*='feedback__text']",
+                "[class*='feedback__content']",
+                "[class*='review__text']",
+                "[class*='comment__text']",
+            ),
+            rating_selectors=("[aria-label*='звезд']", "[aria-label*='star']", "[class*='rating']", "[class*='stars']"),
+            date_selectors=("[class*='feedback__date']", "[class*='review__date']", "time", "[class*='date']"),
+            photo_selectors=("[class*='photo'] img", "[class*='image'] img", "[class*='gallery'] img"),
             review_api_keywords=("feedback", "comments", "reviews", "nm-2-card", "valuation"),
             empty_markers=("отзывов пока нет", "нет отзывов"),
         ),
@@ -160,6 +185,17 @@ class ReviewCollector:
                 "[class*='review']",
                 "[class*='comment']",
             ),
+            author_selectors=("[class*='user']", "[class*='author']", "[class*='name']"),
+            title_selectors=("[class*='title']", "[class*='summary']"),
+            text_selectors=(
+                "[class*='review-text']",
+                "[class*='comment-text']",
+                "[class*='text']",
+                "[itemprop='reviewBody']",
+            ),
+            rating_selectors=("[aria-label*='звезд']", "[aria-label*='star']", "[class*='rating']", "[class*='stars']"),
+            date_selectors=("time", "[class*='date']"),
+            photo_selectors=("[class*='photo'] img", "[class*='image'] img", "[class*='gallery'] img"),
             review_api_keywords=("review", "reviews", "comments", "ugc", "feedback"),
             empty_markers=("отзывов пока нет", "нет отзывов"),
         ),
@@ -217,6 +253,18 @@ class ReviewCollector:
                 "[data-spm*='review']",
                 "[data-spm*='feedback']",
             ),
+            author_selectors=("[class*='user']", "[class*='buyer']", "[class*='author']", "[class*='name']"),
+            title_selectors=("[class*='title']", "[class*='subject']"),
+            text_selectors=(
+                "[class*='feedback-text']",
+                "[class*='review-text']",
+                "[class*='comment-text']",
+                "[class*='content']",
+                "[class*='text']",
+            ),
+            rating_selectors=("[aria-label*='star']", "[class*='rating']", "[class*='star']"),
+            date_selectors=("time", "[class*='date']"),
+            photo_selectors=("[class*='photo'] img", "[class*='image'] img", "[class*='gallery'] img"),
             review_api_keywords=(
                 "review",
                 "reviews",
@@ -231,6 +279,71 @@ class ReviewCollector:
                 "ae.detail",
             ),
             empty_markers=("no reviews", "нет отзывов"),
+        ),
+        MarketplaceAdapter(
+            name="amazon",
+            host_markers=("amazon.",),
+            reviews_tab_selectors=(
+                "a[href*='/product-reviews/']",
+                "a[data-hook='see-all-reviews-link-foot']",
+                "#acrCustomerReviewLink",
+                "#reviews-medley-footer a",
+                "a:has-text('See all reviews')",
+                "a:has-text('See more reviews')",
+                "a:has-text('Customer reviews')",
+                "button:has-text('Customer reviews')",
+            ),
+            show_more_selectors=(
+                "li.a-last a",
+                ".a-pagination .a-last a",
+                "a[data-hook='pagination-next']",
+                "a:has-text('Next page')",
+                "a:has-text('Next')",
+            ),
+            review_container_selectors=(
+                "[data-hook='review']",
+                "[id^='customer_review-']",
+                "[data-hook='review-body']",
+                ".a-section.review",
+                ".review",
+            ),
+            author_selectors=(".a-profile-name", "[data-hook='genome-widget'] .a-profile-name"),
+            title_selectors=(
+                "[data-hook='review-title'] span",
+                "[data-hook='review-title']",
+                ".review-title",
+                "[class*='review-title']",
+            ),
+            text_selectors=(
+                "[data-hook='review-body'] span",
+                "[data-hook='review-body']",
+                ".review-text-content span",
+                ".review-text-content",
+                ".a-expander-content.reviewText",
+                "[class*='review-text']",
+            ),
+            rating_selectors=(
+                "[data-hook='review-star-rating'] span.a-icon-alt",
+                "[data-hook='cmps-review-star-rating'] span.a-icon-alt",
+                "[data-hook='review-star-rating']",
+                "[data-hook='cmps-review-star-rating']",
+                ".review-rating span.a-icon-alt",
+                ".review-rating",
+                "i.a-icon-star span.a-icon-alt",
+                "[aria-label*='out of 5 stars']",
+            ),
+            date_selectors=("[data-hook='review-date']", ".review-date"),
+            photo_selectors=("[data-hook='review-image-tile'] img", ".review-image-tile img", "img[data-hook*='review-image']"),
+            review_api_keywords=(
+                "review",
+                "reviews",
+                "customerreview",
+                "customer-reviews",
+                "product-reviews",
+                "cm-cr",
+                "cr-widget",
+            ),
+            empty_markers=("no customer reviews", "there are 0 customer reviews", "no reviews"),
         ),
     ]
 
@@ -278,6 +391,9 @@ class ReviewCollector:
         "hcaptcha",
         "robot",
         "verify you are human",
+        "enter the characters you see below",
+        "type the characters you see in this image",
+        "sorry, we just need to make sure you're not a robot",
         "подтвердите, что вы не робот",
         "проверка безопасности",
         "капча",
@@ -288,6 +404,9 @@ class ReviewCollector:
         "forbidden",
         "too many requests",
         "temporarily blocked",
+        "click the button below to continue shopping",
+        "automated access to amazon data",
+        "api-services-support@amazon.com",
         "доступ ограничен",
         "слишком много запросов",
     ]
@@ -298,6 +417,7 @@ class ReviewCollector:
         self._browser: Browser | None = None
         self.http_statuses: list[int] = []
         self.network_reviews: list[CollectedReview] = []
+        self.rendered_card_reviews: list[CollectedReview] = []
         self.rendered_scroll_reviews: list[CollectedReview] = []
 
     async def __aenter__(self) -> "ReviewCollector":
@@ -343,6 +463,7 @@ class ReviewCollector:
 
         self.http_statuses = []
         self.network_reviews = []
+        self.rendered_card_reviews = []
         self.rendered_scroll_reviews = []
         adapter = self._adapter_for_url(url, marketplace)
         marketplace = adapter.name
@@ -357,6 +478,7 @@ class ReviewCollector:
 
             await self._polite_pause()
             await self._detect_access_barrier(page)
+            await self._capture_current_rendered_reviews(page, adapter, url, marketplace)
             await self._open_reviews_section(page, adapter)
             rounds = await self._load_reviews_until_stable(
                 page,
@@ -377,13 +499,14 @@ class ReviewCollector:
                     rating=float(row.get("rating", 0.0) or 0.0),
                     date=normalize_whitespace(str(row.get("date", ""))),
                     review_text=normalize_whitespace(str(row.get("review_text", ""))),
-                    photos_count=0,
+                    photos_count=len(row.get("image_urls", []) or []),
+                    image_urls=_image_urls_from_payload_value(row.get("image_urls", []), url),
                 )
                 for row in parsed
             ]
             state_records = await self._extract_spa_state_reviews(page, url, marketplace)
             records = _deduplicate_collected_reviews(
-                [*self.network_reviews, *state_records, *self.rendered_scroll_reviews, *html_records]
+                [*self.network_reviews, *state_records, *self.rendered_card_reviews, *self.rendered_scroll_reviews, *html_records]
             )
             if max_reviews is not None:
                 records = records[:max_reviews]
@@ -391,16 +514,21 @@ class ReviewCollector:
             extraction_sources = {
                 "network_json": len(self.network_reviews),
                 "spa_state": len(state_records),
+                "rendered_card_dom": len(self.rendered_card_reviews),
                 "scroll_dom": len(self.rendered_scroll_reviews),
                 "html_dom": len(html_records),
                 "deduplicated_total": len(records),
             }
             result = CollectionResult(
-                status="success",
+                status="success" if records else "no_reviews",
                 source_url=url,
                 marketplace=marketplace,
                 reviews=records,
-                message=f"Collected {len(records)} review(s).",
+                message=(
+                    f"Collected {len(records)} review(s)."
+                    if records
+                    else "Rendered the public page, but no review records were extracted."
+                ),
                 rounds_completed=rounds,
                 http_statuses=self.http_statuses,
                 extraction_sources=extraction_sources,
@@ -471,7 +599,7 @@ class ReviewCollector:
                         wait_until=wait_until,
                         timeout=min(navigation_timeout_ms, remaining_ms),
                     )
-                    if last_response is None or last_response.status != 429:
+                    if last_response is None or last_response.status not in {404, 410, 429}:
                         return last_response
                 except Exception as exc:
                     last_error = exc
@@ -491,6 +619,8 @@ class ReviewCollector:
 
     async def _open_reviews_section(self, page: Page, adapter: MarketplaceAdapter) -> None:
         """Click a visible reviews tab/button if the page provides one."""
+        if adapter.name == "amazon" and await self._review_count(page, adapter) > 0:
+            return
         for selector in self._merged_selectors(adapter.reviews_tab_selectors, self.reviews_tab_selectors):
             locator = page.locator(selector).first
             try:
@@ -528,8 +658,10 @@ class ReviewCollector:
                     await self._smooth_scroll(page)
 
             await self._wait_for_dynamic_content(page)
-            await self._capture_current_rendered_reviews(page, source_url, marketplace)
-            current_total = len(_deduplicate_collected_reviews([*self.network_reviews, *self.rendered_scroll_reviews]))
+            await self._capture_current_rendered_reviews(page, adapter, source_url, marketplace)
+            current_total = len(
+                _deduplicate_collected_reviews([*self.network_reviews, *self.rendered_card_reviews, *self.rendered_scroll_reviews])
+            )
             current_count = max(await self._review_count(page, adapter), len(self.network_reviews), current_total)
 
             if max_reviews is not None and current_count >= max_reviews:
@@ -547,8 +679,26 @@ class ReviewCollector:
 
         return rounds_completed
 
-    async def _capture_current_rendered_reviews(self, page: Page, source_url: str, marketplace: str) -> None:
+    async def _capture_current_rendered_reviews(
+        self,
+        page: Page,
+        adapter: MarketplaceAdapter,
+        source_url: str,
+        marketplace: str,
+    ) -> None:
         """Accumulate currently rendered review blocks during virtualized scrolling."""
+        try:
+            payloads = await page.evaluate(
+                _RENDERED_REVIEW_CARD_EXTRACTION_SCRIPT,
+                _rendered_card_extraction_config(adapter, self.review_container_selectors),
+            )
+        except Exception:
+            payloads = []
+
+        card_records = _records_from_rendered_card_payloads(payloads, source_url, marketplace)
+        if card_records:
+            self.rendered_card_reviews = _deduplicate_collected_reviews([*self.rendered_card_reviews, *card_records])
+
         try:
             parsed = parse_reviews_from_html(html=await page.content(), source_url=source_url)
         except Exception:
@@ -562,7 +712,8 @@ class ReviewCollector:
                 rating=float(row.get("rating", 0.0) or 0.0),
                 date=normalize_whitespace(str(row.get("date", ""))),
                 review_text=normalize_whitespace(str(row.get("review_text", ""))),
-                photos_count=0,
+                photos_count=len(row.get("image_urls", []) or []),
+                image_urls=_image_urls_from_payload_value(row.get("image_urls", []), source_url),
             )
             for row in parsed
         ]
@@ -818,6 +969,219 @@ def _accept_language_header(locale: str) -> str:
     return fallbacks.get(language, f"{normalized},{language};q=0.9,en-US;q=0.8,en;q=0.7")
 
 
+_GENERIC_AUTHOR_SELECTORS = (
+    "[itemprop='author']",
+    "[class*='author']",
+    "[class*='user']",
+    "[class*='buyer']",
+    "[class*='profile-name']",
+    "[class*='name']",
+)
+_GENERIC_TITLE_SELECTORS = (
+    "[itemprop='name']",
+    "[class*='review-title']",
+    "[class*='title']",
+    "[class*='summary']",
+    "[class*='subject']",
+)
+_GENERIC_TEXT_SELECTORS = (
+    "[itemprop='reviewBody']",
+    "[data-hook='review-body']",
+    "[class*='review-body']",
+    "[class*='review-text']",
+    "[class*='feedback-text']",
+    "[class*='comment-text']",
+    "[class*='content']",
+    "[class*='text']",
+)
+_GENERIC_RATING_SELECTORS = (
+    "[itemprop='ratingValue']",
+    "[aria-label*='star']",
+    "[aria-label*='звезд']",
+    "[title*='star']",
+    "[class*='rating']",
+    "[class*='stars']",
+)
+_GENERIC_DATE_SELECTORS = ("time", "[datetime]", "[class*='date']", "[class*='time']")
+_GENERIC_PHOTO_SELECTORS = ("[class*='photo'] img", "[class*='image'] img", "[class*='gallery'] img", "img")
+
+_RENDERED_REVIEW_CARD_EXTRACTION_SCRIPT = """
+(config) => {
+  const normalize = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+  const queryAll = (root, selectors) => {
+    const nodes = [];
+    const seen = new Set();
+    for (const selector of selectors || []) {
+      if (!selector) continue;
+      try {
+        for (const node of root.querySelectorAll(selector)) {
+          if (!seen.has(node)) {
+            seen.add(node);
+            nodes.push(node);
+          }
+        }
+      } catch (_error) {
+        continue;
+      }
+    }
+    return nodes;
+  };
+  const textOrAttribute = (root, selectors, attributes = []) => {
+    for (const node of queryAll(root, selectors)) {
+      const text = normalize(node.innerText || node.textContent || "");
+      if (text) return text;
+      for (const attribute of attributes) {
+        const value = normalize(node.getAttribute(attribute));
+        if (value) return value;
+      }
+    }
+    return "";
+  };
+  const imageUrl = (node) => {
+    for (const attribute of ["data-a-hires", "data-src", "data-original", "data-lazy-src", "src"]) {
+      const value = normalize(node.getAttribute(attribute));
+      if (value) return value;
+    }
+    const srcset = normalize(node.getAttribute("srcset") || node.getAttribute("data-srcset"));
+    if (srcset) return srcset.split(",")[0].trim().split(" ")[0];
+    return "";
+  };
+  const imageUrls = (root, selectors) => Array.from(new Set(queryAll(root, selectors).map(imageUrl).filter(Boolean)));
+  const containers = queryAll(document, config.containerSelectors || []);
+  return containers.slice(0, config.maxCards || 180).map((block) => ({
+    author: textOrAttribute(block, config.authorSelectors),
+    title: textOrAttribute(block, config.titleSelectors),
+    reviewText: textOrAttribute(block, config.textSelectors),
+    ratingText: textOrAttribute(block, config.ratingSelectors, ["aria-label", "title", "data-rating", "data-stars", "aria-valuenow"]),
+    date: textOrAttribute(block, config.dateSelectors, ["datetime", "title", "aria-label"]),
+    photoUrls: imageUrls(block, config.photoSelectors),
+    containerText: normalize(block.innerText || block.textContent || ""),
+  })).filter((row) => row.reviewText || row.containerText);
+}
+"""
+
+
+def _rendered_card_extraction_config(adapter: MarketplaceAdapter, fallback_container_selectors: list[str]) -> dict[str, Any]:
+    """Build selector config for extracting visible review cards inside Playwright."""
+
+    def select(primary: tuple[str, ...], fallback: tuple[str, ...]) -> list[str]:
+        merged: list[str] = []
+        for selector in [*primary, *fallback]:
+            if selector and selector not in merged:
+                merged.append(selector)
+        return merged
+
+    container_selectors = [
+        selector
+        for selector in select(adapter.review_container_selectors, tuple(fallback_container_selectors))
+        if "review-body" not in selector
+    ]
+    return {
+        "maxCards": 220,
+        "containerSelectors": container_selectors,
+        "authorSelectors": select(adapter.author_selectors, _GENERIC_AUTHOR_SELECTORS),
+        "titleSelectors": select(adapter.title_selectors, _GENERIC_TITLE_SELECTORS),
+        "textSelectors": select(adapter.text_selectors, _GENERIC_TEXT_SELECTORS),
+        "ratingSelectors": select(adapter.rating_selectors, _GENERIC_RATING_SELECTORS),
+        "dateSelectors": select(adapter.date_selectors, _GENERIC_DATE_SELECTORS),
+        "photoSelectors": select(adapter.photo_selectors, _GENERIC_PHOTO_SELECTORS),
+    }
+
+
+def _records_from_rendered_card_payloads(payloads: Any, source_url: str, marketplace: str) -> list[CollectedReview]:
+    """Convert browser-extracted visible review cards into normalized review records."""
+    if not isinstance(payloads, list):
+        return []
+
+    records: list[CollectedReview] = []
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        rating_text = normalize_whitespace(str(payload.get("ratingText", "") or ""))
+        text = _clean_rendered_review_text(str(payload.get("reviewText", "") or ""))
+        if len(text) < 15:
+            continue
+
+        rating = _coerce_float(rating_text)
+        title = _clean_rendered_review_title(str(payload.get("title", "") or ""), rating_text)
+        image_urls = _image_urls_from_payload_value(payload.get("photoUrls", []), source_url)
+        photos_count = max(_coerce_int(payload.get("photosCount")), len(image_urls))
+        records.append(
+            CollectedReview(
+                source_url=source_url,
+                marketplace=marketplace,
+                author=normalize_whitespace(str(payload.get("author", "") or "")),
+                title=title,
+                rating=float(rating or 0.0),
+                date=normalize_whitespace(str(payload.get("date", "") or "")),
+                review_text=text,
+                photos_count=photos_count,
+                image_urls=image_urls,
+            )
+        )
+    return _deduplicate_collected_reviews(records)
+
+
+def _clean_rendered_review_text(text: str) -> str:
+    """Remove common accessibility and expansion boilerplate from visible review text."""
+    cleaned = normalize_whitespace(text)
+    boilerplate_phrases = (
+        "Brief content visible, double tap to read full content.",
+        "Full content visible, double tap to read brief content.",
+        "Brief content visible, double tap to read full content",
+        "Full content visible, double tap to read brief content",
+    )
+    for phrase in boilerplate_phrases:
+        cleaned = cleaned.replace(phrase, " ")
+    return normalize_whitespace(cleaned)
+
+
+def _clean_rendered_review_title(title: str, rating_text: str) -> str:
+    """Keep review titles from absorbing duplicated star-rating text."""
+    cleaned = normalize_whitespace(title)
+    rating_marker = normalize_whitespace(rating_text)
+    if rating_marker and cleaned.lower().startswith(rating_marker.lower()):
+        cleaned = cleaned[len(rating_marker) :].strip(" -:|")
+    return normalize_whitespace(cleaned)
+
+
+def _coerce_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+_AMAZON_ASIN_PATTERN = re.compile(r"^[A-Z0-9]{10}$", flags=re.IGNORECASE)
+
+
+def amazon_review_url(url: str) -> str:
+    """Return Amazon's dedicated public review-page URL for a product URL when an ASIN is present."""
+    asin = _extract_amazon_asin(url)
+    if not asin:
+        return ""
+
+    parsed = urlparse(url)
+    query = urlencode(
+        {
+            "reviewerType": "all_reviews",
+            "sortBy": "recent",
+            "pageNumber": "1",
+        }
+    )
+    return parsed._replace(path=f"/product-reviews/{asin}/", query=query, fragment="").geturl()
+
+
+def amazon_product_url(url: str) -> str:
+    """Return a canonical Amazon product URL stripped of search/ref tracking noise."""
+    asin = _extract_amazon_asin(url)
+    if not asin:
+        return ""
+
+    parsed = urlparse(url)
+    return parsed._replace(path=f"/dp/{asin}/", query="", fragment="").geturl()
+
+
 def _navigation_url_variants(url: str) -> list[str]:
     """Return conservative URL variants that still point to public product pages."""
     parsed = urlparse(url)
@@ -827,11 +1191,15 @@ def _navigation_url_variants(url: str) -> list[str]:
         if candidate and candidate not in variants:
             variants.append(candidate)
 
-    add(url)
-
     hostname = (parsed.hostname or "").lower()
     netloc = parsed.netloc
     path = parsed.path or "/"
+
+    add(url)
+
+    if "amazon." in hostname:
+        add(amazon_product_url(url))
+        add(amazon_review_url(url))
 
     if "aliexpress" in hostname:
         for fragment in ("nav-review", "feedback", "reviews"):
@@ -857,6 +1225,32 @@ def _navigation_url_variants(url: str) -> list[str]:
                 add(parsed._replace(netloc=www_netloc, path=f"{product_path}.html").geturl())
 
     return variants
+
+
+def _extract_amazon_asin(url: str) -> str:
+    """Extract a 10-character Amazon ASIN from common product/review URLs."""
+    parsed = urlparse(url)
+    query_values = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    for key, value in query_values.items():
+        if key.lower() == "asin" and _AMAZON_ASIN_PATTERN.match(value or ""):
+            return value.upper()
+
+    path_parts = [part for part in parsed.path.split("/") if part]
+    lower_parts = [part.lower() for part in path_parts]
+    for marker in ("dp", "product", "product-reviews"):
+        if marker not in lower_parts:
+            continue
+        index = lower_parts.index(marker)
+        if len(path_parts) > index + 1:
+            candidate = path_parts[index + 1].split(".", 1)[0]
+            if _AMAZON_ASIN_PATTERN.match(candidate):
+                return candidate.upper()
+
+    for part in path_parts:
+        candidate = part.split(".", 1)[0]
+        if _AMAZON_ASIN_PATTERN.match(candidate):
+            return candidate.upper()
+    return ""
 
 
 def _is_transient_navigation_error(exc: Exception | str) -> bool:
@@ -901,7 +1295,7 @@ def _sync_goto_with_backoff(page: Any, url: str, config: ReviewCollectorConfig, 
                     wait_until=wait_until,
                     timeout=min(navigation_timeout_ms, remaining_ms),
                 )
-                if last_response is None or last_response.status != 429:
+                if last_response is None or last_response.status not in {404, 410, 429}:
                     return last_response
             except Exception as exc:
                 last_error = exc
@@ -936,6 +1330,7 @@ def collect_reviews_sync(
     marketplace = adapter.name
     http_statuses: list[int] = []
     network_reviews: list[CollectedReview] = []
+    rendered_card_reviews: list[CollectedReview] = []
     rendered_scroll_reviews: list[CollectedReview] = []
 
     with sync_playwright() as playwright:
@@ -981,6 +1376,7 @@ def collect_reviews_sync(
                 raise AccessLimited(f"HTTP {response.status} received while opening the page.")
             _sync_polite_pause(config)
             _sync_detect_access_barrier(page, http_statuses)
+            _sync_capture_current_rendered_reviews(page, adapter, helper, url, marketplace, rendered_scroll_reviews, rendered_card_reviews)
             _sync_open_reviews_section(page, adapter, helper, config)
             rounds = _sync_load_reviews_until_stable(
                 page=page,
@@ -989,6 +1385,7 @@ def collect_reviews_sync(
                 config=config,
                 max_reviews=max_reviews,
                 network_reviews=network_reviews,
+                rendered_card_reviews=rendered_card_reviews,
                 rendered_scroll_reviews=rendered_scroll_reviews,
                 http_statuses=http_statuses,
                 source_url=url,
@@ -1005,26 +1402,32 @@ def collect_reviews_sync(
                     rating=float(row.get("rating", 0.0) or 0.0),
                     date=normalize_whitespace(str(row.get("date", ""))),
                     review_text=normalize_whitespace(str(row.get("review_text", ""))),
-                    photos_count=0,
+                    photos_count=len(row.get("image_urls", []) or []),
+                    image_urls=_image_urls_from_payload_value(row.get("image_urls", []), url),
                 )
                 for row in parsed
             ]
             state_records = _sync_extract_spa_state_reviews(page, url, marketplace)
-            records = _deduplicate_collected_reviews([*network_reviews, *state_records, *rendered_scroll_reviews, *html_records])
+            records = _deduplicate_collected_reviews([*network_reviews, *state_records, *rendered_card_reviews, *rendered_scroll_reviews, *html_records])
             if max_reviews is not None:
                 records = records[:max_reviews]
 
             result = CollectionResult(
-                status="success",
+                status="success" if records else "no_reviews",
                 source_url=url,
                 marketplace=marketplace,
                 reviews=records,
-                message=f"Collected {len(records)} review(s).",
+                message=(
+                    f"Collected {len(records)} review(s)."
+                    if records
+                    else "Rendered the public page, but no review records were extracted."
+                ),
                 rounds_completed=rounds,
                 http_statuses=http_statuses,
                 extraction_sources={
                     "network_json": len(network_reviews),
                     "spa_state": len(state_records),
+                    "rendered_card_dom": len(rendered_card_reviews),
                     "scroll_dom": len(rendered_scroll_reviews),
                     "html_dom": len(html_records),
                     "deduplicated_total": len(records),
@@ -1049,6 +1452,8 @@ def collect_reviews_sync(
 
 def _sync_open_reviews_section(page: Any, adapter: MarketplaceAdapter, helper: ReviewCollector, config: ReviewCollectorConfig) -> None:
     """Open reviews section in sync Playwright mode."""
+    if adapter.name == "amazon" and _sync_review_count(page, adapter, helper) > 0:
+        return
     for selector in helper._merged_selectors(adapter.reviews_tab_selectors, helper.reviews_tab_selectors):
         try:
             locator = page.locator(selector).first
@@ -1067,6 +1472,7 @@ def _sync_load_reviews_until_stable(
     config: ReviewCollectorConfig,
     max_reviews: int | None,
     network_reviews: list[CollectedReview],
+    rendered_card_reviews: list[CollectedReview],
     rendered_scroll_reviews: list[CollectedReview],
     http_statuses: list[int],
     source_url: str,
@@ -1085,8 +1491,16 @@ def _sync_load_reviews_until_stable(
             if not _sync_scroll_last_review_into_view(page, adapter, helper, config):
                 _sync_smooth_scroll(page, config)
         _sync_wait_for_dynamic_content(page, helper, config)
-        _sync_capture_current_rendered_reviews(page, source_url, marketplace, rendered_scroll_reviews)
-        current_total = len(_deduplicate_collected_reviews([*network_reviews, *rendered_scroll_reviews]))
+        _sync_capture_current_rendered_reviews(
+            page,
+            adapter,
+            helper,
+            source_url,
+            marketplace,
+            rendered_scroll_reviews,
+            rendered_card_reviews,
+        )
+        current_total = len(_deduplicate_collected_reviews([*network_reviews, *rendered_card_reviews, *rendered_scroll_reviews]))
         current_count = max(_sync_review_count(page, adapter, helper), len(network_reviews), current_total)
         if max_reviews is not None and current_count >= max_reviews:
             break
@@ -1103,11 +1517,23 @@ def _sync_load_reviews_until_stable(
 
 def _sync_capture_current_rendered_reviews(
     page: Any,
+    adapter: MarketplaceAdapter,
+    helper: ReviewCollector,
     source_url: str,
     marketplace: str,
     rendered_scroll_reviews: list[CollectedReview],
+    rendered_card_reviews: list[CollectedReview],
 ) -> None:
     """Accumulate rendered review blocks during sync virtualized scrolling."""
+    try:
+        payloads = page.evaluate(_RENDERED_REVIEW_CARD_EXTRACTION_SCRIPT, _rendered_card_extraction_config(adapter, helper.review_container_selectors))
+    except Exception:
+        payloads = []
+
+    card_records = _records_from_rendered_card_payloads(payloads, source_url, marketplace)
+    if card_records:
+        rendered_card_reviews[:] = _deduplicate_collected_reviews([*rendered_card_reviews, *card_records])
+
     try:
         parsed = parse_reviews_from_html(html=page.content(), source_url=source_url)
     except Exception:
@@ -1121,7 +1547,8 @@ def _sync_capture_current_rendered_reviews(
             rating=float(row.get("rating", 0.0) or 0.0),
             date=normalize_whitespace(str(row.get("date", ""))),
             review_text=normalize_whitespace(str(row.get("review_text", ""))),
-            photos_count=0,
+            photos_count=len(row.get("image_urls", []) or []),
+            image_urls=_image_urls_from_payload_value(row.get("image_urls", []), source_url),
         )
         for row in parsed
     ]
@@ -1310,6 +1737,8 @@ def _review_from_dict(node: dict[str, Any], source_url: str, marketplace: str) -
                 "valuation",
                 "grade",
                 "score",
+                "productValuation",
+                "productvaluation",
                 "buyerEval",
                 "evalStar",
                 "feedbackRating",
@@ -1332,6 +1761,8 @@ def _review_from_dict(node: dict[str, Any], source_url: str, marketplace: str) -
             "displayName",
             "memberName",
             "name",
+            "wbUserDetails",
+            "userDetails",
         ],
     )
     if isinstance(author, dict):
@@ -1382,8 +1813,25 @@ def _review_from_dict(node: dict[str, Any], source_url: str, marketplace: str) -
     if rating <= 0.0 and _looks_like_product_variant_text(text):
         return None
 
-    photos = _get_first_value(node, ["photos", "images", "media", "pictures", "buyerPictures", "feedbackImages", "imageList", "picList"])
-    photos_count = len(photos) if isinstance(photos, list) else 0
+    photos = _get_first_value(
+        node,
+        [
+            "photos",
+            "photo",
+            "images",
+            "image",
+            "media",
+            "pictures",
+            "buyerPictures",
+            "feedbackImages",
+            "imageList",
+            "picList",
+            "photoLinks",
+            "imageUrls",
+        ],
+    )
+    image_urls = _image_urls_from_payload_value(photos, source_url)
+    photos_count = max(len(image_urls), len(photos) if isinstance(photos, list) else 0)
 
     return CollectedReview(
         source_url=source_url,
@@ -1394,7 +1842,55 @@ def _review_from_dict(node: dict[str, Any], source_url: str, marketplace: str) -
         date=date,
         review_text=text,
         photos_count=photos_count,
+        image_urls=image_urls,
     )
+
+
+def _image_urls_from_payload_value(value: Any, source_url: str) -> list[str]:
+    """Extract safe image URLs from marketplace JSON or browser DOM payloads."""
+    urls: list[str] = []
+
+    def collect(candidate: Any) -> None:
+        if candidate in (None, ""):
+            return
+        if isinstance(candidate, str):
+            normalized = normalize_safe_image_url(candidate, source_url)
+            if normalized:
+                urls.append(normalized)
+            return
+        if isinstance(candidate, list):
+            for item in candidate:
+                collect(item)
+            return
+        if isinstance(candidate, dict):
+            for key in (
+                "fullSize",
+                "miniSize",
+                "big",
+                "small",
+                "url",
+                "src",
+                "imageUrl",
+                "imageURL",
+                "photoUrl",
+                "photoURL",
+                "thumbnail",
+                "thumbnailUrl",
+                "contentUrl",
+                "original",
+            ):
+                if key in candidate:
+                    collect(candidate.get(key))
+
+    collect(value)
+    deduplicated: list[str] = []
+    seen: set[str] = set()
+    for url in urls:
+        if url in seen:
+            continue
+        seen.add(url)
+        deduplicated.append(url)
+    return deduplicated
 
 
 def _walk_json(payload: Any):
@@ -1483,19 +1979,40 @@ def _looks_like_product_variant_text(text: str) -> bool:
         "осталось",
         "шт.",
         "₽",
+        "руб",
         "china mainland",
         "mainland",
         "light blue",
         "dark blue",
+        "yellow",
+        "green",
+        "pink",
+        "purple",
+        "red",
+        "set",
+        "years",
+        "year",
+        "month",
+        "months",
+        "cm",
+        "kg",
         "black",
         "white",
         "blue",
         "china",
         "sku",
         "размер",
+        "разм",
+        "цвет",
         "size",
     ]
-    return any(marker in lowered for marker in variant_markers) or ("|" in lowered and len(lowered.split()) <= 8)
+    if any(marker in lowered for marker in variant_markers):
+        return True
+    if "|" in lowered and len(lowered.split()) <= 10:
+        return True
+    if re.fullmatch(r"[a-zа-яё0-9\s|/_.+-]{2,48}", lowered, flags=re.IGNORECASE) and re.search(r"\d+\s*[-/]\s*\d+\s*(years?|yrs?|лет|года)", lowered):
+        return True
+    return False
 
 
 def _extract_json_objects_from_text(text: str) -> list[Any]:

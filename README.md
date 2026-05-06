@@ -47,7 +47,22 @@ Optional external HTML fetching:
 
 ```powershell
 $env:SCRAPINGBEE_API_KEY="your_api_key_here"
+$env:SCRAPEDO_API_KEY="your_scrapedo_token_here"
 ```
+
+Optional authenticated marketplace API:
+
+```powershell
+$env:WB_FEEDBACKS_API_KEY="your_wildberries_feedbacks_token"
+```
+
+URL mode tries collectors in this order:
+
+1. Marketplace API, when supported. Wildberries can use the public `imtId` feedback endpoint, or the official seller feedback API when `WB_FEEDBACKS_API_KEY` is configured.
+2. Local Playwright collector, which renders the page, opens/scrolls reviews, and extracts DOM/network/SPA-state reviews.
+3. External HTML collectors: ScrapingBee first, then Scrape.do as a fallback when `SCRAPEDO_API_KEY` is configured.
+
+For Ozon, Yandex Market, AliExpress, MegaMarket, Lamoda, DNS, Citilink, M.Video, Eldorado, Avito, Detmir, Gold Apple, Sima-land, Amazon, eBay, Temu, SHEIN and similar public storefronts, the API step reports the exact limitation when no stable unauthenticated review API is configured, then continues to Playwright and external HTML fallbacks.
 
 ## Training
 
@@ -196,6 +211,54 @@ This starts:
 
 - Flask API on `http://127.0.0.1:5000`
 - React dashboard on `http://127.0.0.1:5173`
+
+`run_dev.py` automatically runs `npm install` when frontend dependencies are missing or older than `package.json` / `package-lock.json`. To skip that check:
+
+```powershell
+python run_dev.py --skip-install
+```
+
+Before a defense, release, or GitHub push, run the combined local check:
+
+```powershell
+python check_project.py
+```
+
+It compiles the Python modules and builds the React frontend.
+
+For a backend-only smoke check:
+
+```powershell
+python check_backend.py
+```
+
+It verifies `/health`, model artifact compatibility, OCR/CLIP image-analysis diagnostics, request validation, inline HTML analysis, unsafe image-source filtering, structured rating-record analysis, and saved-report history.
+
+URL mode first tries the project-owned public API and Playwright collectors, then external collectors. It can still be affected by marketplace bot protection, credits, browser availability, or proxy availability. For stable demos and defense runs, use HTML snapshot or structured-file mode when a live marketplace page is unavailable.
+
+Successful `/api/predict` calls are saved to a local SQLite database under `outputs/analysis_history.sqlite3` by default. The history API is available at:
+
+- `GET /api/history`
+- `GET /api/history/<report_id>`
+
+To store history somewhere else, set:
+
+```powershell
+$env:ANALYSIS_HISTORY_DB_PATH="C:\path\to\analysis_history.sqlite3"
+```
+
+`/health` also reports optional photo-analysis readiness under `vision_capabilities`:
+
+- `ocr.status=ready` means Python OCR dependencies and the Tesseract engine are available.
+- `ocr.status=engine_unavailable` usually means `pytesseract` is installed, but the Tesseract executable is not installed or is not on `PATH`.
+- `image_alignment.status=dependencies_ready` means the CLIP/ViT Python dependencies are available. Set `REVIEW_IMAGE_ALIGNMENT_HEALTH_LOAD=1` if you also want `/health` to verify model loading/cache.
+
+On Windows, if Tesseract is installed but not available through `PATH`, point the backend at the executable:
+
+```powershell
+$env:TESSERACT_CMD="C:\Program Files\Tesseract-OCR\tesseract.exe"
+$env:REVIEW_IMAGE_OCR_LANG="eng+rus"
+```
 
 If you want to run services separately, start the backend:
 

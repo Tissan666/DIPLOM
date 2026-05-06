@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import base64
 import io
 import os
 import re
+import shutil
 from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -15,11 +16,17 @@ import pandas as pd
 import requests
 
 from .image_signals import normalize_image_urls
+from .safe_urls import decode_data_image, is_safe_image_source
 from .utils import normalize_whitespace
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 OCR_TEXT_LIMIT = 700
 OCR_FLAG_THRESHOLD = 0.46
+TESSERACT_COMMAND_ENV_NAMES = ("TESSERACT_CMD", "TESSERACT_EXE_PATH", "PYTESSERACT_TESSERACT_CMD")
+COMMON_WINDOWS_TESSERACT_PATHS = (
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+)
 
 PROMO_PATTERNS = {
     "sale_discount": [
@@ -71,7 +78,7 @@ MARKETPLACE_ALIASES = {
     "temu": ["temu"],
     "shein": ["shein"],
     "ozon": ["ozon", "озон"],
-    "wildberries": ["wildberries", "wb", "вайлдберриз"],
+    "wildberries": ["wildberries", "wb", "вб", "вайлдберриз"],
     "walmart": ["walmart"],
     "ebay": ["ebay"],
     "etsy": ["etsy"],
@@ -113,7 +120,10 @@ def build_image_ocr_signals(
     except ImportError:
         return frame, _summary(frame, model_status="not_configured")
 
+    _configure_tesseract_command(pytesseract)
+
     evaluated_indices: set[int] = set()
+    engine_failed = False
     for row_index, urls in image_rows:
         best_signal: dict | None = None
         for image_url in urls[:max_images_per_review]:
@@ -123,7 +133,8 @@ def build_image_ocr_signals(
             try:
                 ocr_text = _extract_text(image, image_ops=ImageOps, pytesseract_module=pytesseract)
             except Exception:
-                return frame, _summary(frame, model_status="engine_unavailable")
+                engine_failed = True
+                continue
 
             signal = _score_ocr_text(ocr_text, source_site=source_site)
             signal["image_url"] = image_url
@@ -142,7 +153,7 @@ def build_image_ocr_signals(
 
     return frame, _summary(
         frame,
-        model_status="ready" if evaluated_indices else "image_fetch_failed",
+        model_status="ready" if evaluated_indices else "engine_unavailable" if engine_failed else "image_fetch_failed",
         evaluated_indices=evaluated_indices,
     )
 
@@ -164,22 +175,107 @@ def _ocr_enabled() -> bool:
     return raw_value not in {"0", "false", "no", "off"}
 
 
+@lru_cache(maxsize=1)
+def ocr_capability_status() -> dict:
+    """Return lightweight OCR readiness diagnostics for health checks."""
+    languages = os.getenv("REVIEW_IMAGE_OCR_LANG", "eng+rus")
+    if not _ocr_enabled():
+        return {
+            "enabled": False,
+            "available": False,
+            "status": "disabled",
+            "engine": "tesseract",
+            "languages": languages,
+        }
+
+    try:
+        from PIL import Image, ImageOps  # noqa: F401
+        import pytesseract
+    except ImportError as exc:
+        return {
+            "enabled": True,
+            "available": False,
+            "status": "not_configured",
+            "engine": "tesseract",
+            "languages": languages,
+            "detail": str(exc),
+        }
+
+    tesseract_command = _configure_tesseract_command(pytesseract)
+    try:
+        version = str(pytesseract.get_tesseract_version())
+    except Exception as exc:
+        return {
+            "enabled": True,
+            "available": False,
+            "status": "engine_unavailable",
+            "engine": "tesseract",
+            "languages": languages,
+            "tesseract_cmd": tesseract_command or None,
+            "detail": str(exc),
+        }
+
+    return {
+        "enabled": True,
+        "available": True,
+        "status": "ready",
+        "engine": "tesseract",
+        "version": version,
+        "languages": languages,
+        "tesseract_cmd": tesseract_command or "tesseract",
+    }
+
+
+def _configure_tesseract_command(pytesseract_module: object) -> str:
+    """Point pytesseract at an explicit tesseract.exe when PATH is not configured."""
+    tesseract_command = _resolve_tesseract_command()
+    if not tesseract_command:
+        return ""
+
+    pytesseract_backend = getattr(pytesseract_module, "pytesseract", pytesseract_module)
+    setattr(pytesseract_backend, "tesseract_cmd", tesseract_command)
+    return tesseract_command
+
+
+def _resolve_tesseract_command() -> str:
+    for env_name in TESSERACT_COMMAND_ENV_NAMES:
+        raw_value = os.getenv(env_name, "").strip().strip('"').strip("'")
+        if not raw_value:
+            continue
+        resolved = shutil.which(raw_value)
+        if resolved:
+            return resolved
+        candidate_path = Path(raw_value)
+        if candidate_path.is_file():
+            return str(candidate_path)
+
+    resolved = shutil.which("tesseract")
+    if resolved:
+        return resolved
+
+    for common_path in COMMON_WINDOWS_TESSERACT_PATHS:
+        candidate_path = Path(common_path)
+        if candidate_path.is_file():
+            return str(candidate_path)
+    return ""
+
+
 def _load_image(url: str, image_cls: object, timeout_seconds: float):
     try:
         raw_url = url.strip()
+        if not is_safe_image_source(raw_url):
+            return None
         parsed = urlparse(raw_url)
         if raw_url.startswith("data:image"):
-            _, encoded = raw_url.split(",", 1)
-            image_bytes = base64.b64decode(encoded)
+            image_bytes = decode_data_image(raw_url, max_bytes=MAX_IMAGE_BYTES)
+            if image_bytes is None:
+                return None
         elif parsed.scheme in {"http", "https"}:
             response = requests.get(raw_url, timeout=timeout_seconds, headers={"User-Agent": "review-image-ocr/1.0"})
             response.raise_for_status()
             image_bytes = response.content[:MAX_IMAGE_BYTES]
         else:
-            path = Path(parsed.path if parsed.scheme == "file" else raw_url)
-            if not path.exists() or path.stat().st_size > MAX_IMAGE_BYTES:
-                return None
-            image_bytes = path.read_bytes()
+            return None
         return image_cls.open(io.BytesIO(image_bytes)).convert("RGB")
     except Exception:
         return None

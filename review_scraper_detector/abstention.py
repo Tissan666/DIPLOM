@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import re
 
 import numpy as np
 import pandas as pd
@@ -12,6 +13,48 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 TRIAGE_CONFIDENT_SUSPICIOUS = "confident_suspicious"
 TRIAGE_CONFIDENT_CLEAN = "confident_clean"
 TRIAGE_MANUAL_REVIEW = "needs_manual_review"
+_TOKEN_RE = re.compile(r"[\w'-]+", flags=re.UNICODE)
+_STRUCTURED_MARKETPLACE_MARKERS = (
+    "достоинства:",
+    "недостатки:",
+    "комментарий:",
+    "pros:",
+    "cons:",
+)
+_LOW_RISK_MARKETPLACE_TERMS = (
+    "оригинал",
+    "качество",
+    "хорош",
+    "отлич",
+    "супер",
+    "понрав",
+    "восторг",
+    "счастлив",
+    "красот",
+    "упаков",
+    "короб",
+    "ребен",
+    "ребён",
+    "дети",
+    "детал",
+    "набор",
+    "лего",
+    "игра",
+    "собрал",
+    "подар",
+    "ярк",
+    "размер",
+    "достав",
+    "пломб",
+    "серийн",
+    "гарант",
+    "звук",
+    "подош",
+    "работает",
+    "удоб",
+    "заряд",
+    "покуп",
+)
 
 
 def build_review_uncertainty_frame(
@@ -196,15 +239,24 @@ def apply_review_abstention_policy(review_df: pd.DataFrame, policy: dict) -> pd.
         probability = float(row.get("suspicious_probability", 0.0) or 0.0)
         uncertainty_score = float(row.get("uncertainty_score", 0.0) or 0.0)
         ood_score = float(row.get("ood_score", 0.0) or 0.0)
+        clean_ood_override = _allow_confident_clean_ood_override(
+            row,
+            probability=probability,
+            clean_threshold=clean_threshold,
+            uncertainty_score=uncertainty_score,
+            uncertainty_threshold=uncertainty_threshold,
+            ood_score=ood_score,
+            ood_threshold=ood_threshold,
+        )
 
         reasons: list[str] = []
         if clean_threshold < probability < suspicious_threshold:
             reasons.append("The hybrid score falls inside the manual-review band.")
         if uncertainty_score > uncertainty_threshold:
             reasons.append("The model signals disagree too much for an automated decision.")
-        if ood_score > ood_threshold:
+        if ood_score > ood_threshold and not clean_ood_override:
             reasons.append("The review looks out-of-domain relative to the training corpus.")
-        if float(row.get("lexical_coverage", 1.0) or 1.0) < 0.32:
+        if float(row.get("lexical_coverage", 1.0) or 1.0) < 0.32 and not clean_ood_override:
             reasons.append("Too little of the wording matches patterns seen during training.")
         if float(row.get("text_hybrid_gap", 0.0) or 0.0) > 0.24:
             reasons.append("The raw text model and the hybrid fraud model disagree materially.")
@@ -228,6 +280,70 @@ def apply_review_abstention_policy(review_df: pd.DataFrame, policy: dict) -> pd.
     frame["requires_manual_review"] = np.asarray(manual_review_flags, dtype=np.int32)
     frame["manual_review_reasons"] = manual_review_reasons
     return frame
+
+
+def _allow_confident_clean_ood_override(
+    row: pd.Series,
+    *,
+    probability: float,
+    clean_threshold: float,
+    uncertainty_score: float,
+    uncertainty_threshold: float,
+    ood_score: float,
+    ood_threshold: float,
+) -> bool:
+    """Do not route clearly low-risk organic reviews to manual review only because the vocabulary is new."""
+    if probability > min(clean_threshold, 0.12):
+        return False
+    if uncertainty_score > uncertainty_threshold:
+        return False
+    if ood_score > max(ood_threshold + 0.24, 0.74):
+        return False
+
+    text = str(row.get("review_text", "") or "")
+    token_count = len(_TOKEN_RE.findall(text.lower()))
+    if token_count < 1:
+        return False
+
+    slang_authenticity = float(row.get("slang_authenticity_score", 0.5) or 0.5)
+    slang_manipulation = float(row.get("slang_manipulation_score", 0.0) or 0.0)
+    rating_manipulation = float(row.get("rating_manipulation_score", 0.0) or 0.0)
+    template_dup_count = int(float(row.get("slang_template_dup_count", 0.0) or 0.0))
+    ai_text_score = float(row.get("ai_text_score", 0.0) or 0.0)
+    low_risk_marketplace_text = _looks_like_low_risk_marketplace_review(text, token_count=token_count)
+    if ai_text_score >= 0.76 and not _looks_like_structured_marketplace_review(text):
+        return False
+    if (
+        low_risk_marketplace_text
+        and probability <= 0.025
+        and rating_manipulation <= 0.38
+        and template_dup_count < 2
+        and ai_text_score < 0.66
+    ):
+        return True
+    if slang_manipulation > 0.18 or rating_manipulation > 0.30 or template_dup_count >= 2:
+        return False
+    if slang_authenticity >= 0.66:
+        return True
+    return low_risk_marketplace_text
+
+
+def _looks_like_structured_marketplace_review(text: str) -> bool:
+    normalized = text.lower()
+    marker_count = sum(1 for marker in _STRUCTURED_MARKETPLACE_MARKERS if marker in normalized)
+    detail_count = sum(1 for term in _LOW_RISK_MARKETPLACE_TERMS if term in normalized)
+    return marker_count >= 1 and detail_count >= 1
+
+
+def _looks_like_low_risk_marketplace_review(text: str, *, token_count: int) -> bool:
+    normalized = text.lower()
+    marker_count = sum(1 for marker in _STRUCTURED_MARKETPLACE_MARKERS if marker in normalized)
+    detail_count = sum(1 for term in _LOW_RISK_MARKETPLACE_TERMS if term in normalized)
+    if marker_count >= 1 and detail_count >= 1:
+        return True
+    if token_count <= 8 and detail_count >= 1:
+        return True
+    return token_count >= 4 and detail_count >= 2
 
 
 def summarize_review_triage(review_df: pd.DataFrame) -> dict[str, float | int]:

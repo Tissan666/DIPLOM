@@ -5,25 +5,26 @@ export function depthWaitMs(depth: AnalysisFormValues["analysisDepth"]): number 
     return 2500;
   }
   if (depth === "deep") {
-    return 9000;
+    return 12000;
   }
-  return 5000;
+  return 6000;
 }
 
 export function depthScrollRounds(depth: AnalysisFormValues["analysisDepth"]): number {
   if (depth === "fast") {
-    return 0;
+    return 1;
   }
   if (depth === "deep") {
-    return 24;
+    return 48;
   }
-  return 12;
+  return 16;
 }
 
 export function buildAnalysisPayload(values: AnalysisFormValues): Record<string, unknown> {
   if (values.sourceMode === "url") {
     return {
       url: values.url.trim(),
+      analysis_depth: values.analysisDepth,
       wait_ms: values.waitMs.trim() ? Number(values.waitMs.trim()) : depthWaitMs(values.analysisDepth),
       scroll_rounds: depthScrollRounds(values.analysisDepth),
       scroll_delay_ms: values.analysisDepth === "deep" ? 1200 : 900,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import asdict
+from functools import lru_cache
 import os
 from pathlib import Path
 from urllib.parse import urlparse
@@ -15,6 +16,7 @@ import torch
 
 from fake_rating_detector.inference import predict_records as predict_rating_records
 from .abstention import apply_review_abstention_policy, build_review_uncertainty_frame, summarize_review_triage
+from .ai_text_signals import build_ai_text_signals
 from .hybrid_combiner import predict_hybrid_meta_probabilities
 from .image_ocr_signals import build_image_ocr_signals
 from .image_signals import build_image_duplicate_signals, normalize_image_urls
@@ -24,14 +26,16 @@ from .model import ReviewClassifier, predict_probabilities
 from .manipulation import analyze_review_manipulation_patterns
 from .parsing import parse_reviews_from_html
 from .marketplace_api import collect_reviews_via_public_marketplace_api
-from .review_collector import CollectionResult, ReviewCollectorConfig, collect_reviews_sync
+from .review_collector import CollectionResult, ReviewCollectorConfig, amazon_product_url, amazon_review_url, collect_reviews_sync
 from .schemas import AnalysisRequest, AnalysisSummary, ReviewPrediction
-from .scraping import DEFAULT_WAIT_MS, fetch_html_via_scrapingbee
+from .scraping import DEFAULT_WAIT_MS, fetch_html_with_fallback
 from .training import build_feature_matrix
 from .utils import normalize_whitespace
 
 
 DEFAULT_BROWSER_COLLECTOR_MAX_REVIEWS = 160
+ANALYSIS_DEPTHS = {"fast", "standard", "deep"}
+DEFAULT_PUBLIC_API_MAX_REVIEWS = 1000
 
 
 def artifacts_exist(artifacts_dir: str | Path = "models") -> bool:
@@ -40,32 +44,485 @@ def artifacts_exist(artifacts_dir: str | Path = "models") -> bool:
     return (artifacts_dir / "review_text_classifier.pt").exists() and (artifacts_dir / "review_text_bundle.joblib").exists()
 
 
+def artifacts_compatible(artifacts_dir: str | Path = "models") -> tuple[bool, str | None]:
+    """Return whether review artifacts can be loaded by the current code."""
+    try:
+        _load_artifacts(str(Path(artifacts_dir).resolve()))
+    except Exception as exc:
+        return False, str(exc)
+    return True, None
+
+
 def analyze_product_url(
     product_url: str,
     artifacts_dir: str | Path = "models",
     api_key: str | None = None,
+    scrapedo_api_key: str | None = None,
     render_js: bool = True,
     country_code: str | None = None,
     wait_ms: int = DEFAULT_WAIT_MS,
     scroll_rounds: int = 0,
     scroll_delay_ms: int = 1200,
+    analysis_depth: str = "standard",
 ) -> dict:
-    """Fetch a product page through the external ScrapingBee API and classify reviews."""
-    html = fetch_html_via_scrapingbee(
-        url=product_url,
-        api_key=api_key,
-        render_js=render_js,
-        country_code=country_code,
+    """Collect a product page through the best available URL strategy and classify reviews."""
+    collection_attempts: list[dict] = []
+    depth_profile = _analysis_depth_profile(
+        analysis_depth=analysis_depth,
         wait_ms=wait_ms,
         scroll_rounds=scroll_rounds,
         scroll_delay_ms=scroll_delay_ms,
     )
-    return analyze_html_document(
-        html=html,
-        source_url=product_url,
-        artifacts_dir=artifacts_dir,
-        source_type="url",
+    public_api_result = _try_public_marketplace_api(
+        product_url,
+        max_reviews=int(depth_profile["public_api_max_reviews"]),
     )
+    collection_attempts.append(_collection_attempt_summary("public_marketplace_api", public_api_result))
+    if _collection_has_reviews(public_api_result):
+        records = _collection_records(public_api_result)
+        if bool(depth_profile["enrich_public_api_with_playwright"]):
+            enrichment_result = _try_playwright_collector(
+                product_url=product_url,
+                wait_ms=int(depth_profile["wait_ms"]),
+                scroll_rounds=int(depth_profile["scroll_rounds"]),
+                scroll_delay_ms=int(depth_profile["scroll_delay_ms"]),
+                max_reviews=int(depth_profile["playwright_max_reviews"]),
+                stable_rounds=int(depth_profile["stable_rounds_to_stop"]),
+            )
+            collection_attempts.append(_collection_attempt_summary("playwright_enrichment", enrichment_result))
+            if _collection_has_reviews(enrichment_result):
+                records = _merge_collection_records(records, _collection_records(enrichment_result))
+        result = analyze_review_records(
+            records=records,
+            source_url=product_url,
+            artifacts_dir=artifacts_dir,
+            source_type="url",
+        )
+        return _with_collection_metadata(result, "public_marketplace_api", collection_attempts, depth_profile)
+
+    playwright_result = _try_playwright_collector(
+        product_url=product_url,
+        wait_ms=int(depth_profile["wait_ms"]),
+        scroll_rounds=int(depth_profile["scroll_rounds"]),
+        scroll_delay_ms=int(depth_profile["scroll_delay_ms"]),
+        max_reviews=int(depth_profile["playwright_max_reviews"]),
+        stable_rounds=int(depth_profile["stable_rounds_to_stop"]),
+    )
+    collection_attempts.append(_collection_attempt_summary("playwright_collector", playwright_result))
+    if _collection_has_reviews(playwright_result):
+        result = analyze_review_records(
+            records=_collection_records(playwright_result),
+            source_url=product_url,
+            artifacts_dir=artifacts_dir,
+            source_type="url",
+        )
+        return _with_collection_metadata(result, "playwright_collector", collection_attempts, depth_profile)
+
+    external_result: dict | None = None
+    last_external_error: Exception | None = None
+    external_messages: list[str] = []
+    for fetch_url in _external_html_fetch_url_candidates(product_url):
+        try:
+            html = fetch_html_with_fallback(
+                url=fetch_url,
+                scrapingbee_api_key=api_key,
+                scrapedo_api_key=scrapedo_api_key,
+                render_js=render_js,
+                country_code=country_code,
+                wait_ms=int(depth_profile["wait_ms"]),
+                scroll_rounds=int(depth_profile["scroll_rounds"]),
+                scroll_delay_ms=int(depth_profile["scroll_delay_ms"]),
+            )
+        except ValueError:
+            raise
+        except Exception as exc:
+            last_external_error = exc
+            external_messages.append(f"{fetch_url}: {exc}")
+            continue
+
+        current_result = analyze_html_document(
+            html=html,
+            source_url=fetch_url,
+            artifacts_dir=artifacts_dir,
+            source_type="url",
+        )
+        review_count = int(current_result.get("summary", {}).get("total_reviews", 0) or 0)
+        external_result = current_result
+        collection_attempts.append(
+            {
+                "strategy": "external_html_collectors",
+                "status": "success" if review_count > 0 else "no_reviews",
+                "reviews": review_count,
+                "message": (
+                    "Collected HTML through ScrapingBee/Scrape.do and parsed it locally."
+                    if review_count > 0
+                    else "HTML was collected through ScrapingBee/Scrape.do, but no review blocks were extracted."
+                ),
+                "fetched_url": fetch_url,
+            }
+        )
+        if review_count > 0:
+            return _with_collection_metadata(current_result, "external_html_collectors", collection_attempts, depth_profile)
+
+    if external_result is not None:
+        return _with_collection_metadata(external_result, "external_html_collectors", collection_attempts, depth_profile)
+    if last_external_error is not None:
+        if len(external_messages) > 1:
+            raise RuntimeError("External HTML collectors failed for all URL variants. " + " | ".join(external_messages))
+        raise last_external_error
+    raise RuntimeError("External HTML collectors did not return a usable result.")
+
+
+def _analysis_depth_profile(
+    analysis_depth: str,
+    wait_ms: int,
+    scroll_rounds: int,
+    scroll_delay_ms: int,
+) -> dict[str, int | str | bool]:
+    """Translate the UI depth mode into concrete collector limits."""
+    depth = str(analysis_depth or "standard").strip().lower()
+    if depth not in ANALYSIS_DEPTHS:
+        depth = "standard"
+
+    requested_wait_ms = max(0, int(wait_ms or 0))
+    requested_scroll_rounds = max(0, int(scroll_rounds or 0))
+    requested_scroll_delay_ms = max(300, min(int(scroll_delay_ms or 900), 3000))
+    public_api_base = _int_env(
+        "REVIEW_PUBLIC_API_MAX_REVIEWS",
+        DEFAULT_PUBLIC_API_MAX_REVIEWS,
+        minimum=1,
+        maximum=5000,
+    )
+    playwright_base = _int_env(
+        "REVIEW_PLAYWRIGHT_COLLECTOR_MAX_REVIEWS",
+        DEFAULT_BROWSER_COLLECTOR_MAX_REVIEWS,
+        minimum=1,
+        maximum=1000,
+    )
+
+    if depth == "fast":
+        public_api_max_reviews = _int_env(
+            "REVIEW_PUBLIC_API_FAST_MAX_REVIEWS",
+            max(80, min(public_api_base, max(1, public_api_base // 3))),
+            minimum=1,
+            maximum=5000,
+        )
+        playwright_max_reviews = _int_env(
+            "REVIEW_PLAYWRIGHT_COLLECTOR_FAST_MAX_REVIEWS",
+            max(40, min(playwright_base, max(1, playwright_base // 2))),
+            minimum=1,
+            maximum=1000,
+        )
+        return {
+            "depth": depth,
+            "wait_ms": max(1500, requested_wait_ms or 2500),
+            "scroll_rounds": max(1, requested_scroll_rounds or 1),
+            "scroll_delay_ms": requested_scroll_delay_ms,
+            "public_api_max_reviews": min(public_api_max_reviews, public_api_base),
+            "playwright_max_reviews": min(playwright_max_reviews, playwright_base),
+            "stable_rounds_to_stop": 2,
+            "enrich_public_api_with_playwright": False,
+        }
+
+    if depth == "deep":
+        public_api_max_reviews = _int_env(
+            "REVIEW_PUBLIC_API_DEEP_MAX_REVIEWS",
+            min(max(public_api_base * 2, public_api_base), 5000),
+            minimum=1,
+            maximum=5000,
+        )
+        playwright_max_reviews = _int_env(
+            "REVIEW_PLAYWRIGHT_COLLECTOR_DEEP_MAX_REVIEWS",
+            min(max(playwright_base * 3, playwright_base), 1000),
+            minimum=1,
+            maximum=1000,
+        )
+        return {
+            "depth": depth,
+            "wait_ms": max(requested_wait_ms, 12000),
+            "scroll_rounds": max(requested_scroll_rounds, 48),
+            "scroll_delay_ms": max(requested_scroll_delay_ms, 1200),
+            "public_api_max_reviews": max(public_api_base, public_api_max_reviews),
+            "playwright_max_reviews": max(playwright_base, playwright_max_reviews),
+            "stable_rounds_to_stop": 5,
+            "enrich_public_api_with_playwright": True,
+        }
+
+    return {
+        "depth": "standard",
+        "wait_ms": max(requested_wait_ms, 5000),
+        "scroll_rounds": max(requested_scroll_rounds, 12),
+        "scroll_delay_ms": requested_scroll_delay_ms,
+        "public_api_max_reviews": public_api_base,
+        "playwright_max_reviews": playwright_base,
+        "stable_rounds_to_stop": _int_env(
+            "REVIEW_PLAYWRIGHT_COLLECTOR_STABLE_ROUNDS",
+            3,
+            minimum=1,
+            maximum=10,
+        ),
+        "enrich_public_api_with_playwright": False,
+    }
+
+
+def _try_public_marketplace_api(product_url: str, max_reviews: int | None = None) -> CollectionResult:
+    """Try marketplace-specific public review API before rendering a browser."""
+    review_limit = max_reviews
+    if review_limit is None:
+        review_limit = _int_env("REVIEW_PUBLIC_API_MAX_REVIEWS", DEFAULT_PUBLIC_API_MAX_REVIEWS, minimum=1, maximum=5000)
+    review_limit = max(1, min(int(review_limit), 5000))
+    try:
+        return collect_reviews_via_public_marketplace_api(url=product_url, max_reviews=review_limit)
+    except Exception as exc:
+        return CollectionResult(
+            status="failed",
+            source_url=product_url,
+            marketplace=_marketplace_label_from_url(product_url),
+            reviews=[],
+            message=f"Public marketplace API collector failed: {exc}",
+        )
+
+
+def _try_playwright_collector(
+    product_url: str,
+    wait_ms: int,
+    scroll_rounds: int,
+    scroll_delay_ms: int,
+    max_reviews: int | None = None,
+    stable_rounds: int | None = None,
+) -> CollectionResult:
+    """Try the local Playwright collector as the second URL collection strategy."""
+    if not _bool_env("REVIEW_PLAYWRIGHT_COLLECTOR_ENABLED", True):
+        return CollectionResult(
+            status="disabled",
+            source_url=product_url,
+            marketplace=_marketplace_label_from_url(product_url),
+            reviews=[],
+            message="Playwright collector is disabled by REVIEW_PLAYWRIGHT_COLLECTOR_ENABLED.",
+        )
+
+    review_limit = max_reviews
+    if review_limit is None:
+        review_limit = _int_env(
+            "REVIEW_PLAYWRIGHT_COLLECTOR_MAX_REVIEWS",
+            DEFAULT_BROWSER_COLLECTOR_MAX_REVIEWS,
+            minimum=1,
+            maximum=1000,
+        )
+    review_limit = max(1, min(int(review_limit), 1000))
+    max_scroll_rounds = max(1, min(int(scroll_rounds), 160))
+    action_delay = max(300, min(int(scroll_delay_ms or 900), 3000))
+    navigation_timeout_ms = max(15000, min(int(wait_ms or DEFAULT_WAIT_MS) + 45000, 120000))
+    output_dir = Path(os.getenv("REVIEW_PLAYWRIGHT_COLLECTOR_OUTPUT_DIR", "outputs/url_playwright_collector"))
+    config = ReviewCollectorConfig(
+        headless=_bool_env("REVIEW_PLAYWRIGHT_COLLECTOR_HEADLESS", True),
+        locale=os.getenv("REVIEW_PLAYWRIGHT_COLLECTOR_LOCALE", "ru-RU"),
+        timezone_id=os.getenv("REVIEW_PLAYWRIGHT_COLLECTOR_TIMEZONE", "Europe/Samara"),
+        action_delay_min_ms=max(250, action_delay // 2),
+        action_delay_max_ms=action_delay,
+        navigation_timeout_ms=navigation_timeout_ms,
+        navigation_retry_budget_ms=max(navigation_timeout_ms, 90000),
+        max_scroll_rounds=max_scroll_rounds,
+        stable_rounds_to_stop=(
+            max(1, min(int(stable_rounds), 10))
+            if stable_rounds is not None
+            else _int_env("REVIEW_PLAYWRIGHT_COLLECTOR_STABLE_ROUNDS", 3, minimum=1, maximum=10)
+        ),
+        output_dir=output_dir,
+        browser_channel=os.getenv("REVIEW_PLAYWRIGHT_COLLECTOR_BROWSER_CHANNEL") or None,
+    )
+    try:
+        return collect_reviews_sync(
+            url=product_url,
+            marketplace=_marketplace_label_from_url(product_url),
+            max_reviews=review_limit,
+            config=config,
+        )
+    except Exception as exc:
+        return CollectionResult(
+            status="failed",
+            source_url=product_url,
+            marketplace=_marketplace_label_from_url(product_url),
+            reviews=[],
+            message=f"Playwright collector failed: {exc}",
+        )
+
+
+def _collection_has_reviews(result: CollectionResult) -> bool:
+    return result.status == "success" and len(result.reviews) > 0
+
+
+def _collection_records(result: CollectionResult) -> list[dict]:
+    records: list[dict] = []
+    for review in result.reviews:
+        row = asdict(review)
+        image_urls = normalize_image_urls(row.get("image_urls", []))
+        row["image_urls"] = image_urls
+        row["image_count"] = max(len(image_urls), int(row.get("photos_count", 0) or 0))
+        records.append(row)
+    return records
+
+
+def _merge_collection_records(primary_records: list[dict], enrichment_records: list[dict]) -> list[dict]:
+    """Merge Playwright-enriched records into API records without duplicating the same review."""
+    merged: list[dict] = []
+    by_key: dict[str, dict] = {}
+    by_text: dict[str, dict] = {}
+
+    for row in [*primary_records, *enrichment_records]:
+        normalized_row = dict(row)
+        text_key = _collection_record_text_key(normalized_row)
+        record_key = _collection_record_key(normalized_row, text_key)
+        existing = by_key.get(record_key)
+        if existing is None and text_key and len(text_key) >= 30:
+            existing = by_text.get(text_key)
+        if existing is not None:
+            _merge_collection_record_into(existing, normalized_row)
+            continue
+
+        _normalize_collection_record_images(normalized_row)
+        merged.append(normalized_row)
+        by_key[record_key] = normalized_row
+        if text_key and len(text_key) >= 30:
+            by_text[text_key] = normalized_row
+
+    return merged
+
+
+def _collection_record_text_key(row: dict) -> str:
+    return normalize_whitespace(str(row.get("review_text", "") or "")).lower()
+
+
+def _collection_record_key(row: dict, text_key: str | None = None) -> str:
+    text_key = text_key if text_key is not None else _collection_record_text_key(row)
+    author_key = normalize_whitespace(str(row.get("author", "") or "")).lower()
+    title_key = normalize_whitespace(str(row.get("title", "") or "")).lower()
+    date_key = normalize_whitespace(str(row.get("date", "") or "")).lower()
+    try:
+        rating_key = f"{float(row.get('rating', 0.0) or 0.0):.1f}"
+    except (TypeError, ValueError):
+        rating_key = "0.0"
+    if text_key:
+        return f"review::{author_key}::{date_key}::{rating_key}::{text_key[:240]}"
+    return f"fallback::{author_key}::{date_key}::{rating_key}::{title_key[:160]}"
+
+
+def _merge_collection_record_into(base: dict, candidate: dict) -> None:
+    for field in ("author", "title", "date", "source_url", "source_site", "marketplace"):
+        if not normalize_whitespace(str(base.get(field, "") or "")) and candidate.get(field):
+            base[field] = candidate[field]
+
+    base_text = normalize_whitespace(str(base.get("review_text", "") or ""))
+    candidate_text = normalize_whitespace(str(candidate.get("review_text", "") or ""))
+    if len(candidate_text) > len(base_text):
+        base["review_text"] = candidate_text
+
+    try:
+        base_rating = float(base.get("rating", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        base_rating = 0.0
+    try:
+        candidate_rating = float(candidate.get("rating", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        candidate_rating = 0.0
+    if base_rating <= 0.0 and candidate_rating > 0.0:
+        base["rating"] = candidate_rating
+
+    _normalize_collection_record_images(base)
+    _normalize_collection_record_images(candidate)
+    image_urls = normalize_image_urls([*base.get("image_urls", []), *candidate.get("image_urls", [])])
+    base["image_urls"] = image_urls
+    base["image_count"] = max(
+        len(image_urls),
+        int(base.get("image_count", 0) or 0),
+        int(candidate.get("image_count", 0) or 0),
+        int(base.get("photos_count", 0) or 0),
+        int(candidate.get("photos_count", 0) or 0),
+    )
+    base["photos_count"] = max(int(base.get("photos_count", 0) or 0), int(candidate.get("photos_count", 0) or 0))
+
+
+def _normalize_collection_record_images(row: dict) -> None:
+    image_urls = normalize_image_urls(row.get("image_urls", []))
+    row["image_urls"] = image_urls
+    row["image_count"] = max(len(image_urls), int(row.get("image_count", 0) or 0), int(row.get("photos_count", 0) or 0))
+
+
+def _collection_attempt_summary(strategy: str, result: CollectionResult) -> dict:
+    return {
+        "strategy": strategy,
+        "status": result.status,
+        "marketplace": result.marketplace,
+        "reviews": len(result.reviews),
+        "message": result.message,
+        "http_statuses": result.http_statuses,
+        "extraction_sources": result.extraction_sources,
+    }
+
+
+def _with_collection_metadata(result: dict, strategy: str, attempts: list[dict], depth_profile: dict | None = None) -> dict:
+    collection = {
+        "strategy": strategy,
+        "attempts": attempts,
+    }
+    if depth_profile is not None:
+        collection["analysis_depth"] = depth_profile.get("depth", "standard")
+        collection["profile"] = {
+            "wait_ms": depth_profile.get("wait_ms"),
+            "scroll_rounds": depth_profile.get("scroll_rounds"),
+            "scroll_delay_ms": depth_profile.get("scroll_delay_ms"),
+            "public_api_max_reviews": depth_profile.get("public_api_max_reviews"),
+            "playwright_max_reviews": depth_profile.get("playwright_max_reviews"),
+            "enrich_public_api_with_playwright": depth_profile.get("enrich_public_api_with_playwright"),
+        }
+    return {
+        **result,
+        "collection": collection,
+    }
+
+
+def _external_html_fetch_url_candidates(product_url: str) -> list[str]:
+    """Prefer dedicated review pages for marketplaces whose product page hides review blocks."""
+    candidates: list[str] = []
+
+    def add(candidate: str) -> None:
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+
+    add(product_url)
+    hostname = (urlparse(product_url).hostname or "").lower()
+    if "amazon" in hostname:
+        add(amazon_product_url(product_url))
+        add(amazon_review_url(product_url))
+    return candidates
+
+
+def _marketplace_label_from_url(url: str) -> str:
+    hostname = (urlparse(url).hostname or "generic").lower().replace("www.", "")
+    if "wildberries" in hostname or hostname.endswith("wb.ru"):
+        return "wildberries"
+    if "amazon" in hostname:
+        return "amazon"
+    if "ozon" in hostname:
+        return "ozon"
+    if "aliexpress" in hostname:
+        return "aliexpress"
+    return hostname or "generic"
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() not in {"", "0", "false", "no", "off"}
+
+
+def _int_env(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(os.getenv(name, str(default)) or default)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(parsed, maximum))
 
 
 def analyze_html_document(
@@ -160,6 +617,12 @@ def analyze_review_records(
             image_ocr_flagged_ratio=0.0,
             image_ocr_score_mean=0.0,
             image_ocr_status="no_images",
+            ai_text_reviews=0,
+            ai_text_flagged_reviews=0,
+            ai_text_flagged_ratio=0.0,
+            ai_text_score_mean=0.0,
+            ai_text_status="no_text",
+            ai_text_model_name="",
         )
         return {
             "request": request_meta.to_dict(),
@@ -204,7 +667,17 @@ def analyze_review_records(
         manipulation_df,
         source_site=source_site,
     )
-    image_summary = {**image_summary, **image_temporal_summary, **image_alignment_summary, **image_ocr_summary}
+    manipulation_df, ai_text_summary = build_ai_text_signals(
+        manipulation_df,
+        artifacts_dir=artifacts_dir,
+    )
+    image_summary = {
+        **image_summary,
+        **image_temporal_summary,
+        **image_alignment_summary,
+        **image_ocr_summary,
+        **ai_text_summary,
+    }
     feature_matrix = build_feature_matrix(review_df, vectorizer=bundle["vectorizer"], fit_vectorizer=False)
     text_probabilities = predict_probabilities(model, feature_matrix)
     combined_probabilities, threshold = _score_hybrid_probabilities(
@@ -213,6 +686,7 @@ def analyze_review_records(
         manipulation_df=manipulation_df,
     )
     combined_probabilities = _apply_image_forensics_boost(combined_probabilities, manipulation_df)
+    combined_probabilities = _apply_ai_text_boost(combined_probabilities, manipulation_df)
     if bundle.get("abstention_policy") is not None:
         manipulation_df = build_review_uncertainty_frame(
             manipulation_df,
@@ -250,7 +724,13 @@ def analyze_review_records(
 
 def _load_artifacts(artifacts_dir: str | Path) -> tuple[ReviewClassifier, dict]:
     """Load the trained text classifier and its vectorizer bundle."""
-    artifacts_dir = Path(artifacts_dir)
+    return _load_artifacts_cached(str(Path(artifacts_dir).resolve()))
+
+
+@lru_cache(maxsize=4)
+def _load_artifacts_cached(artifacts_dir_key: str) -> tuple[ReviewClassifier, dict]:
+    """Load and cache review artifacts by absolute artifact directory."""
+    artifacts_dir = Path(artifacts_dir_key)
     model_path = artifacts_dir / "review_text_classifier.pt"
     bundle_path = artifacts_dir / "review_text_bundle.joblib"
 
@@ -340,6 +820,10 @@ def _build_review_predictions(
                 image_ocr_score=float(row.get("image_ocr_score", 0.0) or 0.0),
                 image_ocr_flag=int(row.get("image_ocr_flag", 0) or 0),
                 image_ocr_text=normalize_whitespace(str(row.get("image_ocr_text", "") or "")),
+                ai_text_score=float(row.get("ai_text_score", 0.0) or 0.0),
+                ai_text_flag=int(row.get("ai_text_flag", 0) or 0),
+                ai_text_label=str(row.get("ai_text_label", "not_evaluated") or "not_evaluated"),
+                ai_text_model=str(row.get("ai_text_model", "") or ""),
                 image_urls=normalize_image_urls(row.get("image_urls", [])),
                 duplicate_image_fingerprints=list(row.get("duplicate_image_fingerprints", []) or []),
                 image_temporal_cluster_reasons=list(row.get("image_temporal_cluster_reasons", []) or []),
@@ -348,6 +832,7 @@ def _build_review_predictions(
                 image_synthetic_reasons=list(row.get("image_synthetic_reasons", []) or []),
                 image_ocr_labels=list(row.get("image_ocr_labels", []) or []),
                 image_ocr_reasons=list(row.get("image_ocr_reasons", []) or []),
+                ai_text_reasons=list(row.get("ai_text_reasons", []) or []),
                 detected_slang_terms=list(row.get("slang_terms", []) or []),
                 suspicion_categories=_build_suspicion_categories(
                     text=review_text,
@@ -362,6 +847,8 @@ def _build_review_predictions(
                     image_stock_marketing_flag=int(row.get("image_stock_marketing_flag", 0) or 0),
                     image_synthetic_flag=int(row.get("image_synthetic_flag", 0) or 0),
                     image_ocr_flag=int(row.get("image_ocr_flag", 0) or 0),
+                    ai_text_score=float(row.get("ai_text_score", 0.0) or 0.0),
+                    ai_text_flag=int(row.get("ai_text_flag", 0) or 0),
                     triage_label=str(row.get("triage_label", "") or ""),
                     uncertainty_score=float(row.get("uncertainty_score", 0.0) or 0.0),
                     ood_score=float(row.get("ood_score", 0.0) or 0.0),
@@ -395,6 +882,9 @@ def _build_review_predictions(
                     image_ocr_score=float(row.get("image_ocr_score", 0.0) or 0.0),
                     image_ocr_flag=int(row.get("image_ocr_flag", 0) or 0),
                     image_ocr_reasons=list(row.get("image_ocr_reasons", []) or []),
+                    ai_text_score=float(row.get("ai_text_score", 0.0) or 0.0),
+                    ai_text_flag=int(row.get("ai_text_flag", 0) or 0),
+                    ai_text_reasons=list(row.get("ai_text_reasons", []) or []),
                 ),
                 manual_review_reasons=list(row.get("manual_review_reasons", []) or []),
             )
@@ -479,6 +969,12 @@ def _build_summary(
         image_ocr_flagged_ratio=float(image_summary.get("image_ocr_flagged_ratio", 0.0)),
         image_ocr_score_mean=float(image_summary.get("image_ocr_score_mean", 0.0)),
         image_ocr_status=str(image_summary.get("image_ocr_status", "not_evaluated")),
+        ai_text_reviews=int(image_summary.get("ai_text_reviews", 0)),
+        ai_text_flagged_reviews=int(image_summary.get("ai_text_flagged_reviews", 0)),
+        ai_text_flagged_ratio=float(image_summary.get("ai_text_flagged_ratio", 0.0)),
+        ai_text_score_mean=float(image_summary.get("ai_text_score_mean", 0.0)),
+        ai_text_status=str(image_summary.get("ai_text_status", "not_evaluated")),
+        ai_text_model_name=str(image_summary.get("ai_text_model_name", "")),
     )
 
 
@@ -566,6 +1062,13 @@ def _build_highlights(review_dicts: list[dict], manipulation_summary: dict, imag
             f"{image_ocr_flagged_reviews} customer photo(s)."
         )
 
+    ai_text_flagged_reviews = int(image_summary.get("ai_text_flagged_reviews", 0) or 0)
+    if ai_text_flagged_reviews > 0:
+        notes.append(
+            f"AI-text detector flagged {ai_text_flagged_reviews} review(s) with polished, template-like, "
+            "weakly grounded language; this is a moderation signal, not proof."
+        )
+
     suspicious_authors = manipulation_summary.get("suspicious_author_records", [])
     if suspicious_authors:
         top_author = suspicious_authors[0]
@@ -635,6 +1138,9 @@ def _build_suspicion_reasons(
     image_ocr_score: float = 0.0,
     image_ocr_flag: int = 0,
     image_ocr_reasons: list[str] | None = None,
+    ai_text_score: float = 0.0,
+    ai_text_flag: int = 0,
+    ai_text_reasons: list[str] | None = None,
 ) -> list[str]:
     """Create lightweight human-readable reasons for suspicious predictions."""
     reasons: list[str] = []
@@ -682,6 +1188,8 @@ def _build_suspicion_reasons(
         reasons.append("The image has weak AI-generated or synthetic-image indicators; treat this as supporting evidence, not proof.")
     if image_ocr_flag and image_ocr_score >= 0.46:
         reasons.append("OCR found promo, watermark, contact, marketplace, or sales text on the customer photo.")
+    if ai_text_flag or ai_text_score >= 0.66:
+        reasons.append("AI-text detector flagged polished/template-like review language; treat this as a moderation signal, not proof.")
 
     for reason in manipulation_reasons or []:
         if reason not in reasons:
@@ -704,6 +1212,9 @@ def _build_suspicion_reasons(
     for reason in image_ocr_reasons or []:
         if reason not in reasons:
             reasons.append(reason)
+    for reason in ai_text_reasons or []:
+        if reason not in reasons:
+            reasons.append(reason)
 
     return reasons
 
@@ -721,6 +1232,8 @@ def _build_suspicion_categories(
     image_stock_marketing_flag: int,
     image_synthetic_flag: int,
     image_ocr_flag: int,
+    ai_text_score: float,
+    ai_text_flag: int,
     triage_label: str,
     uncertainty_score: float,
     ood_score: float,
@@ -763,6 +1276,8 @@ def _build_suspicion_categories(
         add("synthetic_image_hint")
     if image_ocr_flag:
         add("photo_ocr_promo_signal")
+    if ai_text_flag or ai_text_score >= 0.66:
+        add("ai_generated_text_signal")
     if triage_label == "needs_manual_review" or uncertainty_score >= 0.45:
         add("manual_review_uncertainty")
     if ood_score >= 0.45:
@@ -863,6 +1378,19 @@ def _apply_image_forensics_boost(probabilities: np.ndarray, review_df: pd.DataFr
         return probabilities
     base_probabilities = np.asarray(probabilities, dtype=float)
     boosted = base_probabilities + 0.22 * np.clip(photo_scores, 0.0, 1.0) * (1.0 - base_probabilities)
+    return np.clip(boosted, 0.0, 1.0)
+
+
+def _apply_ai_text_boost(probabilities: np.ndarray, review_df: pd.DataFrame) -> np.ndarray:
+    """Conservatively raise risk when the local AI-text signal is strong."""
+    if "ai_text_score" not in review_df.columns:
+        return probabilities
+    ai_scores = review_df["ai_text_score"].to_numpy(dtype=float)
+    if not np.any(ai_scores >= 0.52):
+        return probabilities
+    base_probabilities = np.asarray(probabilities, dtype=float)
+    boost_signal = np.clip((ai_scores - 0.50) / 0.50, 0.0, 1.0)
+    boosted = base_probabilities + 0.16 * boost_signal * (1.0 - base_probabilities)
     return np.clip(boosted, 0.0, 1.0)
 
 

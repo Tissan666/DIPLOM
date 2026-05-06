@@ -2,28 +2,18 @@ import { useId, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FileUp, UploadCloud } from "lucide-react";
 import { useLocale } from "../../i18n";
-import type { ImportSourceTab } from "../../lib/dataImport";
 
 type FileDropZoneProps = {
-  activeTab: ImportSourceTab;
   isDragging: boolean;
   disabled?: boolean;
   onDragStateChange: (dragging: boolean) => void;
   onFileSelect: (file: File) => void;
 };
 
-const tabCopy: Record<Exclude<ImportSourceTab, "api">, { title: string; accept: string }> = {
-  json: { title: "Drop a JSON file here or click to upload", accept: ".json,application/json" },
-  csv: { title: "Drop a CSV file here or click to upload", accept: ".csv,text/csv" },
-  excel: {
-    title: "Drop an Excel file here or click to upload",
-    accept: ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel",
-  },
-  html: { title: "Drop an HTML file here or click to upload", accept: ".html,.htm,text/html" },
-};
+const supportedFileTypes =
+  ".json,.jsonl,.ndjson,.csv,.tsv,.xlsx,.xls,.html,.htm,application/json,application/x-ndjson,text/csv,text/tab-separated-values,text/html,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel";
 
 export function FileDropZone({
-  activeTab,
   isDragging,
   disabled,
   onDragStateChange,
@@ -33,11 +23,6 @@ export function FileDropZone({
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  if (activeTab === "api") {
-    return null;
-  }
-
-  const tabMeta = tabCopy[activeTab];
   const helperId = `${inputId}-helper`;
 
   return (
@@ -81,10 +66,10 @@ export function FileDropZone({
           inputRef.current?.click();
         }
       }}
-      className={`group relative block cursor-pointer overflow-hidden rounded-[24px] border border-dashed px-6 py-8 transition ${
+      className={`group relative block cursor-pointer overflow-hidden rounded-[26px] border border-dashed px-6 py-9 transition duration-300 ${
         isDragging
           ? "border-accent/35 bg-accent-soft/60 shadow-float"
-          : "border-slate-200/80 bg-white/75 hover:border-accent/25 hover:bg-white"
+          : "border-slate-200/80 bg-white/76 hover:-translate-y-0.5 hover:border-accent/25 hover:bg-white hover:shadow-float"
       } ${disabled ? "cursor-not-allowed opacity-70" : ""}`}
     >
       <AnimatePresence>
@@ -99,20 +84,14 @@ export function FileDropZone({
       </AnimatePresence>
 
       <div className="relative z-10 mx-auto flex max-w-xl flex-col items-center text-center">
-        <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white/90 text-accent shadow-float">
-          {isDragging ? <FileUp className="h-7 w-7" /> : <UploadCloud className="h-7 w-7" />}
+        <span className="icon-shell h-16 w-16 rounded-3xl border-accent/20 bg-white/90 text-accent shadow-float">
+          {isDragging ? <FileUp className="h-8 w-8" /> : <UploadCloud className="h-8 w-8" />}
         </span>
-        <h4 className="mt-5 text-lg font-semibold text-ink">
-          {activeTab === "json"
-            ? copy.dataImport.fileDrop.json
-            : activeTab === "csv"
-              ? copy.dataImport.fileDrop.csv
-              : activeTab === "excel"
-                ? copy.dataImport.fileDrop.excel
-                : copy.dataImport.fileDrop.html}
+        <h4 className="mt-5 text-lg font-bold text-ink">
+          {copy.dataImport.fileDrop.file}
         </h4>
         <p id={helperId} className="mt-2 max-w-md text-sm leading-7 text-muted">
-          {activeTab.toUpperCase()} {copy.dataImport.fileDrop.helper}
+          {copy.dataImport.fileDrop.helper}
         </p>
         <button
           type="button"
@@ -121,7 +100,7 @@ export function FileDropZone({
             event.stopPropagation();
             inputRef.current?.click();
           }}
-          className="mt-5 inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-ink transition group-hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+          className="secondary-button mt-5 px-4 py-2"
         >
           {copy.dataImport.chooseFile}
         </button>
@@ -131,7 +110,7 @@ export function FileDropZone({
         ref={inputRef}
         id={inputId}
         type="file"
-        accept={tabMeta.accept}
+        accept={supportedFileTypes}
         className="sr-only"
         disabled={disabled}
         onChange={(event) => {

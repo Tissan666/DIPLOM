@@ -60,6 +60,10 @@ class ReviewPrediction:
     image_ocr_score: float
     image_ocr_flag: int
     image_ocr_text: str
+    ai_text_score: float
+    ai_text_flag: int
+    ai_text_label: str
+    ai_text_model: str
     image_urls: list[str] = field(default_factory=list)
     duplicate_image_fingerprints: list[str] = field(default_factory=list)
     image_temporal_cluster_reasons: list[str] = field(default_factory=list)
@@ -68,6 +72,7 @@ class ReviewPrediction:
     image_synthetic_reasons: list[str] = field(default_factory=list)
     image_ocr_labels: list[str] = field(default_factory=list)
     image_ocr_reasons: list[str] = field(default_factory=list)
+    ai_text_reasons: list[str] = field(default_factory=list)
     detected_slang_terms: list[str] = field(default_factory=list)
     suspicion_categories: list[str] = field(default_factory=list)
     suspicion_reasons: list[str] = field(default_factory=list)
@@ -141,6 +146,12 @@ class AnalysisSummary:
     image_ocr_flagged_ratio: float
     image_ocr_score_mean: float
     image_ocr_status: str
+    ai_text_reviews: int
+    ai_text_flagged_reviews: int
+    ai_text_flagged_ratio: float
+    ai_text_score_mean: float
+    ai_text_status: str
+    ai_text_model_name: str
 
     def to_dict(self) -> dict:
         """Convert the dataclass into a JSON-ready dictionary."""

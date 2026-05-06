@@ -19,6 +19,7 @@ from review_scraper_detector.dataset_builder import (
     DEFAULT_YELPNYC_PATH,
     build_combined_training_dataset,
 )
+from review_scraper_detector.ai_text_signals import train_ai_text_detector
 from review_scraper_detector.sample_data import create_sample_review_dataset
 from review_scraper_detector.training import train_review_classifier
 from review_scraper_detector.utils import save_json
@@ -187,6 +188,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Force recreation of the demo training dataset.",
     )
+    parser.add_argument(
+        "--skip-ai-text-model",
+        action="store_true",
+        help="Skip training the lightweight AI-text detector artifact.",
+    )
+    parser.add_argument(
+        "--ai-text-sample-size",
+        type=int,
+        default=2600,
+        help="Rows in the local synthetic RU/EN AI-text detector training set.",
+    )
     return parser.parse_args()
 
 
@@ -247,6 +259,15 @@ def main() -> None:
         review_summary["dataset_build"] = dataset_build_report
         save_json(review_summary, args.output_dir / "review_training_summary.json")
 
+    ai_text_summary: dict | None = None
+    if not args.skip_ai_text_model:
+        ai_text_summary = train_ai_text_detector(
+            artifacts_dir=args.artifacts_dir,
+            output_dir=args.output_dir,
+            n_samples=args.ai_text_sample_size,
+            random_state=args.seed,
+        )
+
     rating_summary: dict | None = None
     if not args.skip_ratings_model:
         if args.regenerate_sample or not args.ratings_dataset.exists():
@@ -274,6 +295,7 @@ def main() -> None:
 
     summary = {
         "review_text_model": review_summary,
+        "ai_text_detector": ai_text_summary,
         "rating_behavior_model": rating_summary,
     }
     save_json(summary, args.output_dir / "system_training_summary.json")

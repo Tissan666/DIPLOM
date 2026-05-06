@@ -1,7 +1,6 @@
 {
   "url": "https://example.com/product-page",
-  "api_key": "your_api_key_here",
-  "render_js": true,
-  "country_code": "us",
-  "wait_ms": 5000
+  "wait_ms": 5000,
+  "scroll_rounds": 12,
+  "scroll_delay_ms": 1000
 }

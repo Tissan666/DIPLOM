@@ -13,12 +13,12 @@ export function ExplainabilityPanel({ factors, status }: ExplainabilityPanelProp
   const showPlaceholder = status !== "success" || factors.length === 0;
 
   return (
-    <section className="section-wrap py-5">
-      <div className="surface-card p-6 sm:p-7">
+    <section className="section-wrap py-6">
+      <div className="surface-card p-6 sm:p-8">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="eyebrow">{copy.explainability.eyebrow}</p>
-            <h2 className="mt-3 font-display text-3xl text-ink">{copy.explainability.title}</h2>
+            <h2 className="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{copy.explainability.title}</h2>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">{copy.explainability.description}</p>
           </div>
           <span className="badge-soft">
@@ -45,10 +45,10 @@ export function ExplainabilityPanel({ factors, status }: ExplainabilityPanelProp
           </div>
         ) : (
           <div className="mt-8 grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
-            <div className="surface-card-soft p-5">
+            <div className="surface-card-soft p-5 sm:p-6">
               <div className="flex items-center gap-3">
-                <span className="rounded-2xl bg-accent-soft p-2.5 text-accent">
-                  <ScanSearch className="h-5 w-5" />
+                <span className="icon-shell icon-analysis">
+                  <ScanSearch className="h-6 w-6" />
                 </span>
                 <div>
                   <p className="text-sm font-semibold text-ink">{copy.explainability.decisionNarrative}</p>
@@ -58,7 +58,7 @@ export function ExplainabilityPanel({ factors, status }: ExplainabilityPanelProp
 
               <div className="mt-6 space-y-3">
                 {factors.slice(0, 3).map((factor) => (
-                  <div key={factor.label} className="rounded-2xl border border-slate-200/80 bg-white/80 p-4">
+                  <div key={factor.label} className="product-card p-4">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-ink">{factor.label}</p>
                       <span className="text-sm font-semibold text-accent">{Math.round(factor.weight * 100)}%</span>
@@ -69,10 +69,10 @@ export function ExplainabilityPanel({ factors, status }: ExplainabilityPanelProp
               </div>
             </div>
 
-            <div className="surface-card-soft p-5">
+            <div className="surface-card-soft p-5 sm:p-6">
               <div className="flex items-center gap-3">
-                <span className="rounded-2xl bg-white/90 p-2.5 text-ink shadow-sm">
-                  <Info className="h-5 w-5" />
+                <span className="icon-shell border-slate-200 bg-white/90 text-ink">
+                  <Info className="h-6 w-6" />
                 </span>
                 <div>
                   <p className="text-sm font-semibold text-ink">{copy.explainability.topFactors}</p>

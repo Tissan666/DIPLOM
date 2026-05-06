@@ -29,6 +29,7 @@ PROMOTIONAL_PHRASES = (
     "you need this",
 )
 TOKEN_PATTERN = re.compile(r"[\w'-]+", flags=re.UNICODE)
+MISSING_IP_PREFIX = "__missing_ip_"
 
 
 class FeatureEngineeringPipeline:
@@ -91,8 +92,8 @@ class FeatureEngineeringPipeline:
             "item_rating_count": float(self.item_stats["item_rating_count"].median()),
             "item_mean_rating": float(self.item_stats["item_mean_rating"].mean()),
             "item_rating_std": float(self.item_stats["item_rating_std"].median()),
-            "ip_rating_count": float(self.ip_stats["ip_rating_count"].median()),
-            "ip_unique_users": float(self.ip_stats["ip_unique_users"].median()),
+            "ip_rating_count": self._median_or_default(self.ip_stats["ip_rating_count"], default=1.0),
+            "ip_unique_users": self._median_or_default(self.ip_stats["ip_unique_users"], default=1.0),
             "geo_rating_count": float(self.geo_stats.median()) if not self.geo_stats.empty else 1.0,
             "text_duplicate_count": float(self.text_counts.median()) if self.text_counts is not None and not self.text_counts.empty else 0.0,
             "user_item_interaction_count": float(self.user_item_counts.median()) if self.user_item_counts is not None and not self.user_item_counts.empty else 1.0,
@@ -170,8 +171,10 @@ class FeatureEngineeringPipeline:
         features["item_mean_rating"] = frame["item_id"].map(self.item_stats["item_mean_rating"]).fillna(self.default_values["item_mean_rating"])
         features["item_rating_std"] = frame["item_id"].map(self.item_stats["item_rating_std"]).fillna(self.default_values["item_rating_std"])
 
+        ip_missing_mask = self._missing_ip_mask(frame["ip_address"])
         features["ip_rating_count"] = frame["ip_address"].map(self.ip_stats["ip_rating_count"]).fillna(self.default_values["ip_rating_count"])
         features["ip_unique_users"] = frame["ip_address"].map(self.ip_stats["ip_unique_users"]).fillna(self.default_values["ip_unique_users"])
+        features.loc[ip_missing_mask, ["ip_rating_count", "ip_unique_users"]] = 0.0
         features["geo_rating_count"] = frame["geo_key"].map(self.geo_stats).fillna(self.default_values["geo_rating_count"])
         features["text_duplicate_count"] = frame["normalized_text"].map(self.text_counts).fillna(self.default_values["text_duplicate_count"])
 
@@ -284,12 +287,14 @@ class FeatureEngineeringPipeline:
 
     def _build_user_stats(self, df: pd.DataFrame) -> pd.DataFrame:
         """Aggregate user-level behavioral statistics from historical data."""
-        grouped = df.groupby("user_id")
+        frame = df.copy()
+        frame["_ip_for_stats"] = frame["ip_address"].where(~self._missing_ip_mask(frame["ip_address"]))
+        grouped = frame.groupby("user_id")
         user_stats = grouped.agg(
             user_rating_count=("rating", "size"),
             user_mean_rating=("rating", "mean"),
             user_rating_std=("rating", "std"),
-            user_unique_ips=("ip_address", "nunique"),
+            user_unique_ips=("_ip_for_stats", "nunique"),
             user_unique_geos=("geo_key", "nunique"),
         ).fillna(0.0)
         user_stats["user_mean_gap_seconds"] = self._mean_time_gap_by_group(df, "user_id")
@@ -309,7 +314,10 @@ class FeatureEngineeringPipeline:
 
     def _build_ip_stats(self, df: pd.DataFrame) -> pd.DataFrame:
         """Aggregate IP-level statistics to spot proxy pools and shared networks."""
-        return df.groupby("ip_address").agg(
+        frame = df.loc[~self._missing_ip_mask(df["ip_address"])]
+        if frame.empty:
+            return pd.DataFrame(columns=["ip_rating_count", "ip_unique_users"], dtype=float)
+        return frame.groupby("ip_address").agg(
             ip_rating_count=("rating", "size"),
             ip_unique_users=("user_id", "nunique"),
         ).fillna(0.0)
@@ -333,6 +341,7 @@ class FeatureEngineeringPipeline:
         temporal["seconds_since_user_prev_rating"] = self._seconds_since_previous_event(sorted_df, "user_id")
         temporal["user_ratings_last_24h"] = self._count_events_in_window(sorted_df, "user_id", window_seconds=24 * 3600)
         temporal["ip_ratings_last_1h"] = self._count_events_in_window(sorted_df, "ip_address", window_seconds=3600)
+        temporal.loc[self._missing_ip_mask(sorted_df["ip_address"]), "ip_ratings_last_1h"] = 0.0
         temporal["item_ratings_last_24h"] = self._count_events_in_window(sorted_df, "item_id", window_seconds=24 * 3600)
         temporal["seconds_since_user_prev_rating"] = temporal["seconds_since_user_prev_rating"].fillna(
             self.default_values.get("user_mean_gap_seconds", 3600.0)
@@ -364,6 +373,15 @@ class FeatureEngineeringPipeline:
             result.loc[group.index] = counts
 
         return result
+
+    @staticmethod
+    def _missing_ip_mask(ip_series: pd.Series) -> pd.Series:
+        return ip_series.fillna("").astype(str).str.startswith(MISSING_IP_PREFIX)
+
+    @staticmethod
+    def _median_or_default(series: pd.Series, default: float) -> float:
+        value = series.median() if not series.empty else np.nan
+        return float(value) if pd.notna(value) else float(default)
 
     @staticmethod
     def _uppercase_ratio(text: str) -> float:

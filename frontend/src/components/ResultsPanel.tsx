@@ -19,6 +19,10 @@ type ResultsPanelProps = {
   progress: number;
   pipelineStages: PipelineStage[];
   onRetry: () => void;
+  onSetup: () => void;
+  onLoadDemo: () => void;
+  onUseFastRetry: () => void;
+  onUseHtmlSnapshot: () => void;
 };
 
 export function ResultsPanel({
@@ -29,8 +33,13 @@ export function ResultsPanel({
   progress,
   pipelineStages,
   onRetry,
+  onSetup,
+  onLoadDemo,
+  onUseFastRetry,
+  onUseHtmlSnapshot,
 }: ResultsPanelProps) {
   const { copy } = useLocale();
+  const showReportBadges = status === "success";
 
   return (
     <div className="space-y-5">
@@ -38,34 +47,46 @@ export function ResultsPanel({
         initial={{ opacity: 0, y: 22 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.12 }}
-        className="surface-card min-h-[620px] p-6 sm:p-7"
+        className="surface-card p-6 sm:p-8"
       >
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <p className="eyebrow">{copy.resultsPanel.eyebrow}</p>
-            <h2 className="mt-3 break-words font-display text-3xl text-ink sm:text-4xl">{copy.resultsPanel.title}</h2>
+            <h2 className="mt-3 break-words font-display text-3xl font-bold text-ink sm:text-4xl">{copy.resultsPanel.title}</h2>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">{copy.resultsPanel.description}</p>
           </div>
           <div className="flex flex-wrap gap-2 xl:max-w-[360px] xl:justify-end">
-            <span className="badge-soft">
-              <ShieldCheck className="mr-2 h-4 w-4 text-accent" />
-              {copy.resultsPanel.trustworthySplit}
-            </span>
-            <span className="badge-soft">
-              <BarChart3 className="mr-2 h-4 w-4 text-accent" />
-              {copy.resultsPanel.trendCharts}
-            </span>
+            {showReportBadges ? (
+              <>
+                <span className="badge-soft">
+                  <ShieldCheck className="mr-2 h-4 w-4 text-accent" />
+                  {copy.resultsPanel.trustworthySplit}
+                </span>
+                <span className="badge-soft">
+                  <BarChart3 className="mr-2 h-4 w-4 text-accent" />
+                  {copy.resultsPanel.trendCharts}
+                </span>
+              </>
+            ) : (
+              <span className="badge-soft">
+                <ShieldCheck className="mr-2 h-4 w-4 text-accent" />
+                {copy.resultsPanel.waitingBadge}
+              </span>
+            )}
           </div>
         </div>
 
         <div className="mt-6">
-          {status === "idle" && <EmptyState />}
+          {status === "idle" && <EmptyState onSetup={onSetup} onLoadDemo={onLoadDemo} />}
           {status === "loading" && <LoadingState progress={progress} stages={pipelineStages} />}
           {status === "error" && (
             <ErrorState
               errorCode={errorCode}
               message={error || copy.resultsPanel.unexpectedFailure}
+              onLoadDemo={onLoadDemo}
               onRetry={onRetry}
+              onUseFastRetry={onUseFastRetry}
+              onUseHtmlSnapshot={onUseHtmlSnapshot}
             />
           )}
           {status === "success" && result && (

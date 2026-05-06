@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 import joblib
@@ -13,6 +14,8 @@ from .explanations import derive_suspicion_reasons
 from .model import RatingsAutoencoder, reconstruction_errors
 from review_scraper_detector.slang_signals import build_page_slang_profiles, build_slang_suspicion_reason
 
+MISSING_IP_PREFIX = "__missing_ip_"
+
 
 def artifacts_exist(artifacts_dir: str | Path) -> bool:
     """Return True when both the trained model weights and bundle are available."""
@@ -20,9 +23,24 @@ def artifacts_exist(artifacts_dir: str | Path) -> bool:
     return (artifacts_dir / "autoencoder.pt").exists() and (artifacts_dir / "pipeline.joblib").exists()
 
 
+def artifacts_compatible(artifacts_dir: str | Path) -> tuple[bool, str | None]:
+    """Return whether rating artifacts can be loaded by the current code."""
+    try:
+        _load_artifacts(str(Path(artifacts_dir).resolve()))
+    except Exception as exc:
+        return False, str(exc)
+    return True, None
+
+
 def _load_artifacts(artifacts_dir: str | Path) -> tuple[RatingsAutoencoder, dict]:
     """Load the trained Autoencoder and preprocessing bundle from disk."""
-    artifacts_dir = Path(artifacts_dir)
+    return _load_artifacts_cached(str(Path(artifacts_dir).resolve()))
+
+
+@lru_cache(maxsize=4)
+def _load_artifacts_cached(artifacts_dir_key: str) -> tuple[RatingsAutoencoder, dict]:
+    """Load and cache rating artifacts by absolute artifact directory."""
+    artifacts_dir = Path(artifacts_dir_key)
     model_path = artifacts_dir / "autoencoder.pt"
     bundle_path = artifacts_dir / "pipeline.joblib"
 
@@ -121,8 +139,15 @@ def _serialize_records(df: pd.DataFrame) -> list[dict]:
         json_ready = json_ready.drop(columns=drop_columns)
     if "is_fake" in json_ready.columns and (json_ready["is_fake"] < 0).all():
         json_ready = json_ready.drop(columns=["is_fake"])
+    if "ip_address" in json_ready.columns:
+        json_ready["ip_address"] = json_ready["ip_address"].map(_public_ip_value)
     json_ready["timestamp"] = json_ready["timestamp"].apply(lambda value: value.isoformat())
     return json_ready.to_dict(orient="records")
+
+
+def _public_ip_value(value: object) -> str:
+    text = "" if value is None else str(value)
+    return "" if text.startswith(MISSING_IP_PREFIX) else text
 
 
 def _merge_suspicion_reasons(base_reasons: list[str], slang_profile: dict) -> list[str]:

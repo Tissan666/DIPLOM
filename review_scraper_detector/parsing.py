@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Iterable
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup, Tag
 
+from .safe_urls import normalize_safe_image_url
 from .utils import extract_rating_value, normalize_whitespace
 
 
@@ -56,6 +58,7 @@ def _parse_reviews_from_json_ld(soup: BeautifulSoup, source_url: str, source_sit
 
         for review_obj in _iter_json_ld_reviews(payload):
             text = normalize_whitespace(str(review_obj.get("reviewBody", "")))
+            text = _clean_amazon_review_text(text)
             if not text:
                 continue
 
@@ -114,28 +117,91 @@ def _iter_json_ld_reviews(payload: object) -> Iterable[dict]:
 
 
 def _parse_amazon_reviews(soup: BeautifulSoup, source_url: str, source_site: str) -> list[ParsedReview]:
-    """Parse Amazon review blocks using data-hook attributes."""
+    """Parse Amazon review blocks from product and dedicated review pages."""
     reviews: list[ParsedReview] = []
-    for block in soup.select("[data-hook='review']"):
-        text = _extract_first_text(block, ["[data-hook='review-body']", "[data-hook='review-body'] span"])
-        if not text:
-            continue
+    selectors = [
+        "[data-hook='review']",
+        "[id^='customer_review-']",
+        ".a-section.review",
+        ".review",
+        "[class*='customer-review']",
+    ]
+    seen_blocks: set[int] = set()
 
-        reviews.append(
-            ParsedReview(
-                author=_extract_first_text(block, [".a-profile-name"]),
-                title=_extract_first_text(block, ["[data-hook='review-title'] span", "[data-hook='review-title']"]),
-                rating=extract_rating_value(
-                    _extract_first_text(block, ["[data-hook='review-star-rating']", "[data-hook='cmps-review-star-rating']"])
-                ),
-                date=_extract_first_text(block, ["[data-hook='review-date']"]),
-                review_text=text,
-                source_url=source_url,
-                source_site=source_site,
-                image_urls=_extract_image_urls(block, source_url),
+    for selector in selectors:
+        for block in soup.select(selector):
+            block_id = id(block)
+            if block_id in seen_blocks:
+                continue
+            seen_blocks.add(block_id)
+
+            text = _extract_first_text(
+                block,
+                [
+                    "[data-hook='review-body'] span",
+                    "[data-hook='review-body']",
+                    ".review-text-content span",
+                    ".review-text-content",
+                    ".a-expander-content.reviewText",
+                    "[class*='review-text']",
+                ],
             )
-        )
+            text = _clean_amazon_review_text(text)
+            if not text:
+                continue
+
+            rating_text = _extract_first_text_or_attribute(
+                block,
+                [
+                    "[data-hook='review-star-rating'] span.a-icon-alt",
+                    "[data-hook='cmps-review-star-rating'] span.a-icon-alt",
+                    "[data-hook='review-star-rating']",
+                    "[data-hook='cmps-review-star-rating']",
+                    ".review-rating span.a-icon-alt",
+                    ".review-rating",
+                    "i.a-icon-star span.a-icon-alt",
+                    "[aria-label*='out of 5 stars']",
+                ],
+                attributes=["aria-label", "title"],
+            )
+
+            reviews.append(
+                ParsedReview(
+                    author=_extract_first_text(block, [".a-profile-name", "[data-hook='genome-widget'] .a-profile-name"]),
+                    title=_clean_amazon_review_text(
+                        _extract_first_text(
+                            block,
+                            [
+                                "[data-hook='review-title'] span",
+                                "[data-hook='review-title']",
+                                ".review-title",
+                                "[class*='review-title']",
+                            ],
+                        )
+                    ),
+                    rating=extract_rating_value(rating_text),
+                    date=_extract_first_text(block, ["[data-hook='review-date']", ".review-date"]),
+                    review_text=text,
+                    source_url=source_url,
+                    source_site=source_site,
+                    image_urls=_extract_image_urls(block, source_url),
+                )
+            )
     return reviews
+
+
+def _clean_amazon_review_text(text: str) -> str:
+    """Remove Amazon accessibility boilerplate that is embedded inside review blocks."""
+    cleaned = normalize_whitespace(text)
+    boilerplate_phrases = (
+        "Brief content visible, double tap to read full content.",
+        "Full content visible, double tap to read brief content.",
+        "Brief content visible, double tap to read full content",
+        "Full content visible, double tap to read brief content",
+    )
+    for phrase in boilerplate_phrases:
+        cleaned = cleaned.replace(phrase, " ")
+    return normalize_whitespace(cleaned)
 
 
 def _parse_generic_review_blocks(soup: BeautifulSoup, source_url: str, source_site: str) -> list[ParsedReview]:
@@ -211,6 +277,26 @@ def _extract_first_text(block: Tag, selectors: list[str]) -> str:
     return ""
 
 
+def _extract_first_text_or_attribute(block: Tag, selectors: list[str], attributes: list[str]) -> str:
+    """Return text or a useful attribute value from the first matching selector."""
+    for selector in selectors:
+        node = block.select_one(selector)
+        if node is None:
+            continue
+
+        text = normalize_whitespace(node.get_text(" ", strip=True))
+        if text:
+            return text
+
+        for attribute in attributes:
+            raw_value = node.get(attribute)
+            if raw_value:
+                value = normalize_whitespace(str(raw_value))
+                if value:
+                    return value
+    return ""
+
+
 def _extract_image_urls(block: Tag, source_url: str) -> list[str]:
     """Extract likely customer-submitted images from one review block."""
     urls: list[str] = []
@@ -251,13 +337,7 @@ def _iter_image_candidates(node: Tag) -> Iterable[str]:
 
 def _normalize_image_candidate(raw_value: str, source_url: str) -> str:
     value = normalize_whitespace(raw_value)
-    if not value or value.startswith("#"):
-        return ""
-    if value.startswith("data:image/gif"):
-        return ""
-    if value.startswith("//"):
-        value = f"https:{value}"
-    return urljoin(source_url, value)
+    return normalize_safe_image_url(value, source_url)
 
 
 def _is_likely_non_review_image(node: Tag) -> bool:
@@ -325,12 +405,73 @@ def _deduplicate_reviews(reviews: list[ParsedReview]) -> list[ParsedReview]:
     deduplicated: list[ParsedReview] = []
     seen_keys: set[str] = set()
     for review in reviews:
-        key = normalize_whitespace(review.review_text).lower()
+        text = normalize_whitespace(review.review_text)
+        if _looks_like_non_review_text(text, review):
+            continue
+        review.review_text = text
+        key = text.lower()
         if not key or key in seen_keys:
             continue
         seen_keys.add(key)
         deduplicated.append(review)
     return deduplicated
+
+
+def _looks_like_non_review_text(text: str, review: ParsedReview) -> bool:
+    """Filter product variants, profile labels, and handles that broad HTML selectors can capture."""
+    lowered = normalize_whitespace(text).lower()
+    if not lowered:
+        return True
+
+    has_review_context = bool(review.author or review.date or float(review.rating or 0.0) > 0.0)
+    if has_review_context:
+        return False
+
+    token_count = len(re.findall(r"[\w'-]+", lowered))
+    if token_count <= 2 and len(lowered) <= 32 and not any(char in lowered for char in ".!?,;:"):
+        return True
+
+    if _looks_like_profile_handle(lowered):
+        return True
+
+    variant_markers = (
+        "sku",
+        "size",
+        "размер",
+        "цвет",
+        "color",
+        "white",
+        "black",
+        "yellow",
+        "green",
+        "pink",
+        "blue",
+        "set",
+        "cm",
+        "kg",
+        "years",
+        "year",
+        "лет",
+        "года",
+    )
+    if ("|" in lowered and token_count <= 10) or any(marker in lowered for marker in variant_markers):
+        if token_count <= 10 and not any(char in lowered for char in ".!?,;:"):
+            return True
+
+    return False
+
+
+def _looks_like_profile_handle(text: str) -> bool:
+    """Return True for short handles/usernames that external HTML can expose as cards."""
+    compact = text.strip().lstrip("@")
+    if " " in compact:
+        parts = compact.split()
+        if len(parts) > 2:
+            return False
+        compact = "".join(parts)
+    if len(compact) > 40:
+        return False
+    return bool(re.fullmatch(r"[a-z0-9][a-z0-9_.-]{2,}(?:[a-z]\.)?", compact, flags=re.IGNORECASE))
 
 
 def _infer_site_name(source_url: str) -> str:

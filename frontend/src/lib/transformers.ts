@@ -2,6 +2,7 @@ import { getDemoResult } from "./mockData";
 import type { Locale } from "../i18n";
 import type {
   AnomalyTypePoint,
+  CollectionTrace,
   DashboardResult,
   DetectorCardData,
   ExplainabilityFactor,
@@ -43,6 +44,138 @@ function detectorStatusFromScore(score: number): "stable" | "watch" | "critical"
   return "stable";
 }
 
+function buildCollectionTrace(response: ReviewApiResponse, locale: Locale): CollectionTrace | undefined {
+  const trace = response.collection;
+  if (!trace || !Array.isArray(trace.attempts) || trace.attempts.length === 0) {
+    return undefined;
+  }
+
+  return {
+    strategy: localizeCollectionStrategy(trace.strategy, locale),
+    analysis_depth: typeof trace.analysis_depth === "string" ? trace.analysis_depth : undefined,
+    profile: trace.profile && typeof trace.profile === "object" ? trace.profile : undefined,
+    attempts: trace.attempts.map((attempt) => ({
+      ...attempt,
+      strategy: localizeCollectionStrategy(attempt.strategy, locale),
+      status: localizeCollectionStatus(attempt.status, locale),
+      marketplace: attempt.marketplace ? localizeMarketplaceName(String(attempt.marketplace), locale) : attempt.marketplace,
+      reviews: Number(attempt.reviews || 0),
+      message: attempt.message ? localizeCollectionMessage(String(attempt.message), locale) : "",
+    })),
+  };
+}
+
+function localizeCollectionStrategy(strategy: string, locale: Locale) {
+  if (locale === "en") {
+    return strategyLabelEn(strategy);
+  }
+  const labels: Record<string, string> = {
+    public_marketplace_api: "API маркетплейса",
+    playwright_collector: "Playwright-сборщик",
+    playwright_enrichment: "Playwright-обогащение",
+    external_html_collectors: "ScrapingBee / Scrape.do",
+  };
+  return labels[strategy] || strategyLabelEn(strategy);
+}
+
+function strategyLabelEn(strategy: string) {
+  const labels: Record<string, string> = {
+    public_marketplace_api: "Marketplace API",
+    playwright_collector: "Playwright collector",
+    playwright_enrichment: "Playwright enrichment",
+    external_html_collectors: "ScrapingBee / Scrape.do",
+  };
+  return labels[strategy] || strategy.replace(/_/g, " ");
+}
+
+function localizeCollectionStatus(status: string, locale: Locale) {
+  const normalized = String(status || "unknown").toLowerCase();
+  if (locale === "en") {
+    return normalized;
+  }
+  const labels: Record<string, string> = {
+    success: "успешно",
+    failed: "ошибка",
+    disabled: "отключено",
+    unsupported: "не подходит",
+    partial: "частично",
+    empty: "пусто",
+    no_reviews: "нет отзывов",
+    access_limited: "ограничен доступ",
+    timeout: "таймаут",
+    captcha_required: "капча",
+  };
+  return labels[normalized] || normalized;
+}
+
+function localizeCollectionMessage(message: string, locale: Locale) {
+  if (locale === "en") {
+    return message;
+  }
+  return message
+    .replace("Collected HTML through ScrapingBee/Scrape.do and parsed it locally.", "HTML получен через ScrapingBee/Scrape.do и разобран локальным парсером.")
+    .replace("Collected ", "Собрано ")
+    .replace(" Wildberries text review(s) from public feedback API.", " текстовых отзывов Wildberries через публичный feedback API.")
+    .replace(" Wildberries review(s) from official seller feedback API.", " отзывов Wildberries через официальный seller feedback API.")
+    .replace("Playwright collector is disabled by REVIEW_PLAYWRIGHT_COLLECTOR_ENABLED.", "Playwright-сборщик отключен флагом REVIEW_PLAYWRIGHT_COLLECTOR_ENABLED.")
+    .replace("Wildberries URL does not contain imtId, so the public feedback API cannot be queried directly.", "В URL Wildberries нет imtId, поэтому публичный feedback API нельзя запросить напрямую.")
+    .replace("Wildberries API collection needs either an imtId in the URL for the public feedback endpoint or WB_FEEDBACKS_API_KEY/WILDBERRIES_FEEDBACKS_API_KEY for the official seller feedback API. The system will continue with Playwright and external HTML collectors.", "Для API-сбора Wildberries нужен imtId в URL или ключ WB_FEEDBACKS_API_KEY/WILDBERRIES_FEEDBACKS_API_KEY для официального seller feedback API. Система продолжит через Playwright и внешние HTML-сервисы.")
+    .replace("Ozon review API requires authenticated seller API access and is not configured as an unauthenticated public collector. The system will continue with Playwright and external HTML collectors.", "API отзывов Ozon требует авторизованный seller API и не подключен как открытый публичный сборщик. Система продолжит через Playwright и внешние HTML-сервисы.")
+    .replace("Yandex Market product feedback API requires Partner API credentials and a businessId. The system will continue with Playwright and external HTML collectors.", "API отзывов Яндекс Маркета требует Partner API credentials и businessId. Система продолжит через Playwright и внешние HTML-сервисы.")
+    .replace("AliExpress does not expose a stable unauthenticated review API for arbitrary public product URLs in this project. The system will continue with Playwright and external HTML collectors.", "Для AliExpress в проекте нет стабильного открытого API отзывов по произвольной публичной ссылке. Система продолжит через Playwright и внешние HTML-сервисы.")
+    .replace("is recognized, but no stable unauthenticated review API collector is configured. The system will continue with Playwright and external HTML collectors.", "распознан, но стабильный открытый API-сборщик отзывов не подключен. Система продолжит через Playwright и внешние HTML-сервисы.")
+    .replace("No marketplace API collector is configured for this URL. The system will continue with Playwright and external HTML collectors.", "Для этого URL нет подключенного API-сборщика маркетплейса. Система продолжит через Playwright и внешние HTML-сервисы.")
+    .replace("Public marketplace API collector failed:", "Публичный API маркетплейса завершился ошибкой:")
+    .replace("Playwright collector failed:", "Playwright-сборщик завершился ошибкой:");
+}
+
+function localizeMarketplaceName(marketplace: string, locale: Locale) {
+  const labelsRu: Record<string, string> = {
+    wildberries: "Wildberries",
+    ozon: "Ozon",
+    yandex_market: "Яндекс Маркет",
+    aliexpress: "AliExpress",
+    megamarket: "Мегамаркет",
+    avito: "Avito",
+    lamoda: "Lamoda",
+    dns: "DNS",
+    citilink: "Ситилинк",
+    mvideo: "М.Видео",
+    eldorado: "Эльдорадо",
+    vseinstrumenti: "ВсеИнструменты",
+    detsky_mir: "Детский мир",
+    goldapple: "Золотое Яблоко",
+    sima_land: "Сима-ленд",
+    amazon: "Amazon",
+    ebay: "eBay",
+    temu: "Temu",
+    shein: "SHEIN",
+  };
+  const labelsEn: Record<string, string> = {
+    wildberries: "Wildberries",
+    ozon: "Ozon",
+    yandex_market: "Yandex Market",
+    aliexpress: "AliExpress",
+    megamarket: "MegaMarket",
+    avito: "Avito",
+    lamoda: "Lamoda",
+    dns: "DNS",
+    citilink: "Citilink",
+    mvideo: "M.Video",
+    eldorado: "Eldorado",
+    vseinstrumenti: "Vseinstrumenti",
+    detsky_mir: "Detsky Mir",
+    goldapple: "Gold Apple",
+    sima_land: "Sima-land",
+    amazon: "Amazon",
+    ebay: "eBay",
+    temu: "Temu",
+    shein: "SHEIN",
+  };
+  const normalized = marketplace.toLowerCase();
+  return (locale === "ru" ? labelsRu[normalized] : labelsEn[normalized]) || marketplace;
+}
+
 function trustLevel(probability: number): "trusted" | "neutral" | "low" {
   if (probability >= 0.8) {
     return "low";
@@ -57,9 +190,23 @@ const knownTextTranslations: Record<string, string> = {
   "Text similarity": "Текстовая схожесть",
   "Burst posting": "Всплеск публикаций",
   "Temporal cluster": "Временной кластер",
-  "Bilingual slang signal": "Сигнал bilingual slang",
+  "Temporal clustering": "Временная кластеризация",
+  "Customer photo reuse": "Повтор фото покупателей",
+  "Weak product evidence": "Слабая конкретика в отзыве",
+  "Photo vs review text": "Фото vs текст отзыва",
+  "Photo OCR text": "OCR текста на фото",
+  "OCR/marketing text on photo": "OCR/маркетинговый текст на фото",
+  "Author cluster": "Авторский кластер",
+  "Timed photo cluster": "Временной кластер фото",
+  "Stock/marketing photos": "Стоковые/маркетинговые фото",
+  "Stock or synthetic photos": "Стоковые или синтетические фото",
+  "Synthetic image hints": "Признаки синтетического изображения",
+  "AI Text Check": "Проверка на AI",
+  "IP Address Check": "Проверка IP-адресов",
+  "Hourly IP burst": "IP-всплеск за час",
+  "Bilingual slang signal": "Смешанный русско-английский язык",
   "Rating shift": "Сдвиг рейтингов",
-  "Sentiment repetition": "Повтор sentiment-паттернов",
+  "Sentiment repetition": "Повтор тональных шаблонов",
   "User cluster anomaly": "Аномалия user-кластера",
   "Threshold breach": "Пороговое срабатывание",
   "Repeated suspicious users": "Повторяющиеся подозрительные пользователи",
@@ -69,6 +216,15 @@ const knownTextTranslations: Record<string, string> = {
   "Peak suspicious probability": "Пиковая вероятность подозрительности",
   "Manual review uncertainty": "Неопределенность ручной проверки",
   "Photo forensics signal": "Фото-форензика",
+  "AI-generated text signal": "ИИ-текст в отзыве",
+  "Duplicate photo signal": "Повтор фото покупателей",
+  "Photo temporal cluster signal": "Временной кластер фото",
+  "Image/text mismatch signal": "Фото vs текст отзыва",
+  "Stock/marketing photo signal": "Стоковые/маркетинговые фото",
+  "Synthetic image signal": "Признаки синтетического изображения",
+  "Photo OCR signal": "OCR текста на фото",
+  "Language template signal": "Повтор тональных шаблонов",
+  "Out-of-domain uncertainty": "Out-of-domain неопределенность",
   "Low-risk review profile": "Низкорисковый профиль отзывов",
   "Extraction coverage": "Покрытие извлечения отзывов",
   "The neural model considers this review highly suspicious.": "Нейросетевая модель считает этот отзыв сильно подозрительным.",
@@ -99,41 +255,48 @@ const knownTextTranslations: Record<string, string> = {
   "Many comments rely on hype-heavy slang instead of grounded product detail.": "Многие комментарии опираются на хайповый сленг вместо конкретных деталей о товаре.",
   "Russian and English slang are mixed unusually often across the current review page.": "Русский и английский сленг необычно часто смешиваются на текущей странице отзывов.",
   "Russian and English slang are mixed unusually often across the current review sample.": "Русский и английский сленг необычно часто смешиваются в текущей выборке отзывов.",
-  "A repeated slang template appears across multiple reviews on the page.": "Повторяющийся slang-шаблон встречается в нескольких отзывах на странице.",
-  "A repeated slang template appears across multiple reviews, which strengthens the coordination hypothesis.": "Повторяющийся slang-шаблон встречается в нескольких отзывах, что усиливает гипотезу координации.",
-  "A similar slang-heavy template repeats across multiple ratings.": "Похожий slang-шаблон повторяется в нескольких оценках.",
-  "A similar slang signature appears across multiple reviews, which looks coordinated.": "Похожий slang-сигнатурный паттерн встречается в нескольких отзывах и выглядит скоординированным.",
+  "A repeated slang template appears across multiple reviews on the page.": "Повторяющийся сленговый шаблон встречается в нескольких отзывах на странице.",
+  "A repeated slang template appears across multiple reviews, which strengthens the coordination hypothesis.": "Повторяющийся сленговый шаблон встречается в нескольких отзывах, что усиливает гипотезу координации.",
+  "A similar slang-heavy template repeats across multiple ratings.": "Похожий шаблон с перегруженным сленгом повторяется в нескольких оценках.",
+  "A similar slang signature appears across multiple reviews, which looks coordinated.": "Похожая сленговая сигнатура встречается в нескольких отзывах и выглядит скоординированной.",
   "Several comments use grounded colloquial language with concrete detail, which slightly weakens the fake-review hypothesis.": "Несколько комментариев используют живую разговорную речь с конкретными деталями, что немного ослабляет гипотезу фейковых отзывов.",
-  "The bilingual slang detector found a visible share of hype-heavy comments that look more coordinated than conversational.": "Bilingual slang-детектор нашёл заметную долю хайповых комментариев, которые выглядят скорее скоординированными, чем естественными.",
-  "The slang detector also uses validation-calibrated weights and marketplace-aware lexicons, not only hand-written rules.": "Slang-детектор использует не только ручные правила, но и веса, откалиброванные на validation-наборе, а также marketplace-aware лексиконы.",
-  "The same slang-heavy language pattern appears in multiple reviews on this page.": "Одинаковый slang-паттерн встречается в нескольких отзывах на этой странице.",
+  "The bilingual slang detector found a visible share of hype-heavy comments that look more coordinated than conversational.": "Детектор смешанного сленга нашёл заметную долю хайповых комментариев, которые выглядят скорее скоординированными, чем естественными.",
+  "The slang detector also uses validation-calibrated weights and marketplace-aware lexicons, not only hand-written rules.": "Детектор сленга использует не только ручные правила, но и веса, откалиброванные на проверочном наборе, а также словари с учётом маркетплейса.",
+  "The same slang-heavy language pattern appears in multiple reviews on this page.": "Одинаковый сленговый паттерн встречается в нескольких отзывах на этой странице.",
   "The language pattern looks hype-heavy and weakly grounded in real usage detail.": "Языковой паттерн выглядит хайповым и слабо привязанным к реальным деталям использования.",
-  "The review mixes Russian and English hype slang in a way that looks orchestrated rather than natural.": "Отзыв смешивает русский и английский hype-slang так, что это выглядит скорее срежиссированно, чем естественно.",
-  "The slang pattern looks unusually hype-driven for a natural customer comment.": "Slang-паттерн выглядит слишком hype-driven для естественного покупательского комментария.",
+  "The review mixes Russian and English hype slang in a way that looks orchestrated rather than natural.": "Отзыв смешивает русский и английский хайповый сленг так, что это выглядит скорее срежиссированно, чем естественно.",
+  "The slang pattern looks unusually hype-driven for a natural customer comment.": "Сленговый паттерн выглядит слишком рекламно-хайповым для естественного покупательского комментария.",
   "The hybrid score falls inside the manual-review band.": "Гибридный скор попал в зону ручной проверки.",
   "The model signals disagree too much for an automated decision.": "Сигналы модели слишком сильно расходятся для автоматического решения.",
   "The review looks out-of-domain relative to the training corpus.": "Отзыв выглядит вне домена относительно обучающего корпуса.",
   "Too little of the wording matches patterns seen during training.": "Слишком малая часть формулировок совпадает с паттернами, встречавшимися при обучении.",
   "The raw text model and the hybrid fraud model disagree materially.": "Сырая текстовая модель и гибридная fraud-модель существенно расходятся.",
   "The same IP address is associated with many accounts.": "Один и тот же IP-адрес связан со многими аккаунтами.",
-  "The rating happened in an unusual short-term burst.": "Оценка появилась в необычном краткосрочном всплеске активности.",
+  "The rating happened in an unusual short-term burst.": "Оценка появилась в необычном краткосрочном всплеске активности, включая возможный IP-всплеск.",
   "The user posted several ratings in a short period.": "Пользователь оставил несколько оценок за короткий период.",
   "The review text is duplicated across several ratings.": "Текст отзыва дублируется в нескольких оценках.",
   "The rating strongly deviates from the normal score for this item.": "Оценка сильно отклоняется от обычного рейтинга этого товара.",
   "The score is statistically unusual compared with other ratings for this item.": "Оценка статистически нетипична по сравнению с другими оценками этого товара.",
   "The rating is extreme and paired with a very short review.": "Экстремальная оценка сопровождается очень коротким отзывом.",
   "The wording uses promotional stock phrases that often appear in coordinated ratings.": "Формулировка использует рекламные шаблонные фразы, которые часто встречаются в скоординированных оценках.",
-  "OCR found sale, discount, coupon, promo, or similar marketing text on the photo.": "OCR нашёл на фото sale, discount, coupon, promo или похожий маркетинговый текст.",
-  "OCR found hype claims such as best product, best seller, top choice, or must buy.": "OCR нашёл хайповые заявления вроде best product, best seller, top choice или must buy.",
-  "OCR found ad, sponsored, official-store, or watermark-style text on the photo.": "OCR нашёл на фото текст в стиле рекламы, sponsored, official-store или watermark.",
+  "OCR found sale, discount, coupon, promo, or similar marketing text on the photo.": "OCR нашёл на фото скидку, купон, промокод или похожий маркетинговый текст.",
+  "OCR found hype claims such as best product, best seller, top choice, or must buy.": "OCR нашёл рекламные заявления вроде «лучший товар», «хит продаж», «топ-выбор» или «обязательно купить».",
+  "OCR found ad, sponsored, official-store, or watermark-style text on the photo.": "OCR нашёл на фото текст в стиле рекламы, спонсорской отметки, официального магазина или водяного знака.",
   "OCR found contact handles, social links, or store/domain text on the photo.": "OCR нашёл на фото контакты, социальные ссылки или текст магазина/домена.",
   "Customer photos were extracted, but CLIP/ViT image-text alignment is not configured on this machine yet.": "Покупательские фото были извлечены, но CLIP/ViT-сопоставление изображения и текста на этой машине ещё не настроено.",
   "The customer photo evidence is reused across multiple reviews.": "Покупательское фото повторяется в нескольких отзывах.",
   "The same customer photo appears in a short time window across different authors.": "Одно и то же покупательское фото появилось у разных авторов за короткий промежуток времени.",
   "The attached customer photo does not match the review text or inferred product category.": "Прикрепленное фото не совпадает с текстом отзыва или предполагаемой категорией товара.",
-  "The customer image looks like a stock, catalog, studio, render, banner, or listing asset.": "Фото выглядит как стоковый, каталожный, студийный, рендерный, баннерный или listing-ассет.",
-  "The image has weak AI-generated or synthetic-image indicators; treat this as supporting evidence, not proof.": "У изображения есть слабые признаки AI-generated/synthetic; это только вспомогательный сигнал, не доказательство.",
-  "OCR found promo, watermark, contact, marketplace, or sales text on the customer photo.": "OCR нашёл на фото промо-текст, watermark, контакты, marketplace branding или sales-надписи.",
+  "The customer image looks like a stock, catalog, studio, render, banner, or listing asset.": "Фото выглядит как стоковый, каталожный, студийный, рендерный, баннерный материал или изображение из карточки товара.",
+  "The image has weak AI-generated or synthetic-image indicators; treat this as supporting evidence, not proof.": "У изображения есть слабые признаки генерации ИИ или синтетики; это только вспомогательный сигнал, не доказательство.",
+  "OCR found promo, watermark, contact, marketplace, or sales text on the customer photo.": "OCR нашёл на фото промо-текст, водяной знак, контакты, брендинг маркетплейса или продающие надписи.",
+  "AI-text detector flagged polished/template-like review language; treat this as a moderation signal, not proof.": "Детектор отметил признаки синтетической подачи текста; это сигнал для модерации, а не доказательство.",
+  "The wording shows AI-like polish: generic balanced phrasing with weak personal usage detail.": "Формулировки выглядят машинно выверенными: много общих фраз и мало личных деталей использования.",
+  "The text is polished but weakly grounded in concrete ownership, delivery, sizing, or usage details.": "Текст слабо подкреплён проверяемыми деталями: покупкой, доставкой, размером или реальным сценарием использования.",
+  "Sentence structure is unusually even and uses formal transition phrases.": "Структура предложений необычно ровная и использует формальные связки.",
+  "The text uses long dash punctuation patterns that are common in polished generated reviews.": "Пунктуационный рисунок с длинным тире усиливает сигнал машинно выверенной стилистики.",
+  "The review uses compact marketplace cliches about price, delivery, support, or packaging with a synthetic review rhythm.": "Отзыв использует компактные маркетплейс-клише про цену, доставку, поддержку или упаковку с синтетическим ритмом подачи.",
+  "The wording contains repeated AI-style review openings across the current page.": "В выборке повторяются похожие AI-style начала отзывов.",
 };
 
 function localizeKnownText(text: string, locale: Locale) {
@@ -180,21 +343,28 @@ function localizeDynamicKnownText(text: string) {
     /^Stock\/marketing photo detection flagged (\d+) image\(s\) that look closer to catalog, studio, render, banner, or listing assets than user-taken snapshots\.$/
   );
   if (stockPhotoMatch) {
-    return `Детектор stock/marketing фото отметил ${stockPhotoMatch[1]} изображений, похожих скорее на каталог, студийный рендер, баннер или listing-ассет, чем на пользовательское фото.`;
+    return `Детектор стоковых и маркетинговых фото отметил ${stockPhotoMatch[1]} изображений, похожих скорее на каталог, студийный рендер, баннер или материал карточки товара, чем на пользовательское фото.`;
   }
 
   const syntheticMatch = text.match(
     /^AI\/synthetic image detection produced weak auxiliary hints on (\d+) image\(s\); this signal should support, not replace, human review or stronger fraud evidence\.$/
   );
   if (syntheticMatch) {
-    return `AI/synthetic image detector дал слабые вспомогательные сигналы по ${syntheticMatch[1]} изображению(ям); этот сигнал должен дополнять, а не заменять ручную проверку или более сильные fraud-доказательства.`;
+    return `Детектор синтетических изображений дал слабые вспомогательные сигналы по ${syntheticMatch[1]} изображению(ям); этот сигнал должен дополнять, а не заменять ручную проверку или более сильные доказательства накрутки.`;
   }
 
   const ocrMatch = text.match(
     /^OCR found promo text, watermark-like text, contact handles, or marketplace branding on (\d+) customer photo\(s\)\.$/
   );
   if (ocrMatch) {
-    return `OCR нашёл promo-текст, watermark-подобный текст, контакты или marketplace branding на ${ocrMatch[1]} покупательских фото.`;
+    return `OCR нашёл промо-текст, водяной знак, контакты или брендинг маркетплейса на ${ocrMatch[1]} покупательских фото.`;
+  }
+
+  const aiTextMatch = text.match(
+    /^AI-text detector flagged (\d+) review\(s\) with polished, template-like, weakly grounded language; this is a moderation signal, not proof\.$/
+  );
+  if (aiTextMatch) {
+    return `Детектор синтетической стилистики пометил ${aiTextMatch[1]} отзыв(ов): ровная подача, повторяемые речевые связки и слабая привязка к реальному опыту; это сигнал для модерации, а не доказательство.`;
   }
 
   const topAuthorMatch = text.match(/^Top suspicious author cluster: (.+) with (\d+) flagged review\(s\)\.$/);
@@ -211,12 +381,12 @@ function localizeDynamicKnownText(text: string) {
     /^The slang profile looks hype-heavy and weakly grounded in (.+) detail \((.+)\)\.$/
   );
   if (slangTermsMatch) {
-    return `Slang-профиль выглядит хайповым и слабо привязанным к деталям домена ${slangTermsMatch[1]} (${slangTermsMatch[2]}).`;
+    return `Сленговый профиль выглядит хайповым и слабо привязанным к деталям домена ${slangTermsMatch[1]} (${slangTermsMatch[2]}).`;
   }
 
   const slangDomainMatch = text.match(/^The slang profile looks hype-heavy and weakly grounded in (.+) detail\.$/);
   if (slangDomainMatch) {
-    return `Slang-профиль выглядит хайповым и слабо привязанным к деталям домена ${slangDomainMatch[1]}.`;
+    return `Сленговый профиль выглядит хайповым и слабо привязанным к деталям домена ${slangDomainMatch[1]}.`;
   }
 
   const duplicatePhotoLargeMatch = text.match(
@@ -270,35 +440,35 @@ function localizeDynamicKnownText(text: string) {
     /^The wording matches suspicious slang terms: (.+)\.$/
   );
   if (suspiciousWordingMatch) {
-    return `Формулировка совпадает с подозрительными slang-терминами: ${suspiciousWordingMatch[1]}.`;
+    return `Формулировка совпадает с подозрительными сленговыми терминами: ${suspiciousWordingMatch[1]}.`;
   }
 
   const slangToneMatch = text.match(
     /^The slang-heavy tone contains little concrete (.+) detail\.$/
   );
   if (slangToneMatch) {
-    return `Slang-heavy тон содержит мало конкретных деталей домена ${slangToneMatch[1]}.`;
+    return `Перегруженный сленгом тон содержит мало конкретных деталей домена ${slangToneMatch[1]}.`;
   }
 
   const learnedMarketplaceSlangMatch = text.match(
     /^The wording matches suspicious slang patterns learned from (.+)-style reviews\.$/
   );
   if (learnedMarketplaceSlangMatch) {
-    return `Формулировка совпадает с подозрительными slang-паттернами, выученными на отзывах в стиле ${learnedMarketplaceSlangMatch[1]}.`;
+    return `Формулировка совпадает с подозрительными сленговыми паттернами, выученными на отзывах в стиле ${learnedMarketplaceSlangMatch[1]}.`;
   }
 
   const marketplaceHypeSlangMatch = text.match(
     /^The comment uses hype-heavy (.+)-style slang but gives little grounded delivery or product detail\.$/
   );
   if (marketplaceHypeSlangMatch) {
-    return `Комментарий использует hype-heavy slang в стиле ${marketplaceHypeSlangMatch[1]}, но даёт мало конкретики о доставке или товаре.`;
+    return `Комментарий использует хайповый сленг в стиле ${marketplaceHypeSlangMatch[1]}, но даёт мало конкретики о доставке или товаре.`;
   }
 
   const domainSpecificSlangMatch = text.match(
     /^The slang-heavy tone contains little (.+)-specific detail, which can indicate scripted hype\.$/
   );
   if (domainSpecificSlangMatch) {
-    return `Slang-heavy тон содержит мало деталей, специфичных для ${domainSpecificSlangMatch[1]}, что может указывать на scripted hype.`;
+    return `Перегруженный сленгом тон содержит мало деталей, специфичных для ${domainSpecificSlangMatch[1]}, что может указывать на рекламный сценарий.`;
   }
 
   const ocrForeignMarketplaceMatch = text.match(
@@ -310,7 +480,7 @@ function localizeDynamicKnownText(text: string) {
 
   const ocrMarketplaceBrandMatch = text.match(/^OCR found marketplace branding text on the photo: (.+)\.$/);
   if (ocrMarketplaceBrandMatch) {
-    return `OCR нашёл marketplace branding на фото: ${ocrMarketplaceBrandMatch[1]}.`;
+    return `OCR нашёл брендинг маркетплейса на фото: ${ocrMarketplaceBrandMatch[1]}.`;
   }
 
   return "";
@@ -407,12 +577,12 @@ function buildSlangDetectorCard(summary: Record<string, unknown> | undefined, lo
 
   return {
     id: "bilingual-slang",
-    name: locale === "ru" ? "Проверка bilingual slang" : "Bilingual Slang Check",
+    name: locale === "ru" ? "Проверка смешанного сленга" : "Bilingual Slang Check",
     description:
       locale === "ru"
         ? domainLabel === "общий"
-          ? "Отделяет органичный разговорный RU/EN-язык от hype-heavy mixed slang и scripted promo-tone."
-          : `Отделяет органичный разговорный RU/EN-язык от hype-heavy mixed slang, используя grounding-сигналы домена ${domainLabel}.`
+          ? "Отделяет живой русско-английский разговорный язык от хайпового смешанного сленга и рекламного шаблона."
+          : `Отделяет живой русско-английский разговорный язык от хайпового смешанного сленга, используя сигналы привязки к домену ${domainLabel}.`
         : domainLabel === "general"
           ? "Separates organic RU/EN colloquial language from hype-heavy mixed slang and scripted promo tone."
           : `Separates organic RU/EN colloquial language from hype-heavy mixed slang using ${domainLabel}-specific grounding cues.`,
@@ -442,12 +612,12 @@ function buildSlangInsight(summary: Record<string, unknown> | undefined, locale:
 
   if (templateClusterRatio >= 0.18) {
     return locale === "ru"
-      ? `Slang-движок нашел повторяющиеся языковые шаблоны примерно в ${Math.round(templateClusterRatio * 100)}% текущей выборки.`
+      ? `Сленговый движок нашёл повторяющиеся языковые шаблоны примерно в ${Math.round(templateClusterRatio * 100)}% текущей выборки.`
       : `The slang engine found repeated language templates across ${Math.round(templateClusterRatio * 100)}% of the current sample.`;
   }
   if (pageSlangSignalRatio >= 0.25 || slangManipulationMean >= 0.22) {
     return locale === "ru"
-      ? `Bilingual slang-анализ пометил около ${Math.round(pageSlangSignalRatio * 100)}% выборки как hype-heavy или слабо grounded ${domainLabel}-язык.`
+      ? `Анализ смешанного сленга пометил около ${Math.round(pageSlangSignalRatio * 100)}% выборки как хайповый или слабо привязанный к домену ${domainLabel} язык.`
       : `Bilingual slang analysis flagged ${Math.round(pageSlangSignalRatio * 100)}% of the sample for hype-heavy or weakly grounded ${domainLabel} language.`;
   }
   if (pageBilingualSlangRatio >= 0.18) {
@@ -457,7 +627,7 @@ function buildSlangInsight(summary: Record<string, unknown> | undefined, locale:
   }
   if (pageOrganicSlangRatio >= 0.25 && slangAuthenticityMean >= 0.58) {
     return locale === "ru"
-      ? "Slang-layer видит в основном grounded conversational language, а не scripted hype, что немного ослабляет fraud-гипотезу."
+      ? "Сленговый слой видит в основном живой разговорный язык с конкретикой, а не рекламный сценарий, что немного ослабляет гипотезу накрутки."
       : "The slang layer sees mostly grounded conversational language rather than scripted hype, which softens the fraud hypothesis.";
   }
   return null;
@@ -507,12 +677,12 @@ function buildImageAlignmentInsight(summary: Record<string, unknown> | undefined
   const modelStatus = String(summary.image_alignment_model_status || "");
   if (mismatchReviews > 0) {
     return locale === "ru"
-      ? `CLIP/ViT слой нашел ${mismatchReviews} фото, которые визуально слабее совпадают с текстом отзыва или категорией товара. Проверено фото-отзывов: ${evaluatedReviews}.`
+      ? `Слой CLIP/ViT нашёл ${mismatchReviews} фото, которые визуально слабее совпадают с текстом отзыва или категорией товара. Проверено фото-отзывов: ${evaluatedReviews}.`
       : `The CLIP/ViT layer found ${mismatchReviews} photo(s) that weakly match the review text or inferred product category. Evaluated photo reviews: ${evaluatedReviews}.`;
   }
   if (modelStatus === "not_configured" || modelStatus === "model_unavailable") {
     return locale === "ru"
-      ? "Фото извлечены, но CLIP/ViT alignment еще не настроен на этой машине: установите transformers/Pillow и модель включится без изменений фронтенда."
+      ? "Фото извлечены, но сопоставление CLIP/ViT ещё не настроено на этой машине: установите transformers/Pillow, и модель включится без изменений фронтенда."
       : "Photos were extracted, but CLIP/ViT alignment is not configured on this machine yet; install transformers/Pillow and the model will activate without frontend changes.";
   }
   return null;
@@ -530,7 +700,7 @@ function buildStockMarketingInsight(summary: Record<string, unknown> | undefined
   }
 
   return locale === "ru"
-    ? `Stock/marketing слой пометил ${stockReviews} фото как похожие на каталог, студийный рендер, баннер или listing-скрин. Доля среди отзывов с фото около ${Math.round(stockRatio * 100)}%.`
+    ? `Слой стоковых и маркетинговых фото пометил ${stockReviews} фото как похожие на каталог, студийный рендер, баннер или скрин карточки товара. Доля среди отзывов с фото около ${Math.round(stockRatio * 100)}%.`
     : `The stock/marketing layer flagged ${stockReviews} photo(s) that look like catalog, studio render, banner, or listing assets. About ${Math.round(stockRatio * 100)}% of photo reviews.`;
 }
 
@@ -546,7 +716,7 @@ function buildSyntheticImageInsight(summary: Record<string, unknown> | undefined
   }
 
   return locale === "ru"
-    ? `AI/synthetic image слой дал слабую подсказку по ${syntheticReviews} фото (${Math.round(syntheticRatio * 100)}% фото-отзывов). Это supporting evidence, а не самостоятельное доказательство.`
+    ? `Слой синтетических изображений дал слабую подсказку по ${syntheticReviews} фото (${Math.round(syntheticRatio * 100)}% фото-отзывов). Это вспомогательный сигнал, а не самостоятельное доказательство.`
     : `The AI/synthetic image layer produced weak hints on ${syntheticReviews} photo(s), about ${Math.round(syntheticRatio * 100)}% of photo reviews. This is supporting evidence, not standalone proof.`;
 }
 
@@ -560,7 +730,7 @@ function buildImageOcrInsight(summary: Record<string, unknown> | undefined, loca
   const status = String(summary.image_ocr_status || "");
   if (flaggedReviews > 0) {
     return locale === "ru"
-      ? `OCR по фото нашел промо-надписи, watermark, контакты или marketplace branding в ${flaggedReviews} фото (${Math.round(flaggedRatio * 100)}% OCR-проверенных фото).`
+      ? `OCR по фото нашёл промо-надписи, водяные знаки, контакты или брендинг маркетплейса в ${flaggedReviews} фото (${Math.round(flaggedRatio * 100)}% OCR-проверенных фото).`
       : `Photo OCR found promo text, watermarks, contact handles, or marketplace branding in ${flaggedReviews} photo(s), ${Math.round(flaggedRatio * 100)}% of OCR-checked photos.`;
   }
   if (status === "not_configured" || status === "engine_unavailable") {
@@ -569,6 +739,23 @@ function buildImageOcrInsight(summary: Record<string, unknown> | undefined, loca
       : "Photos were extracted, but OCR is not configured yet; install pytesseract and the system Tesseract engine to read watermark/promo text.";
   }
   return null;
+}
+
+function buildAiTextInsight(summary: Record<string, unknown> | undefined, locale: Locale): string | null {
+  if (!summary) {
+    return null;
+  }
+
+  const flaggedReviews = Number(summary.ai_text_flagged_reviews || 0);
+  const flaggedRatio = Number(summary.ai_text_flagged_ratio || 0);
+  const scoreMean = Number(summary.ai_text_score_mean || 0);
+  if (flaggedReviews <= 0 && scoreMean < 0.42) {
+    return null;
+  }
+
+  return locale === "ru"
+    ? `Проверка на AI оценила синтетическую подачу отзывов: ${flaggedReviews} сигнал(ов), средний скор ${Math.round(scoreMean * 100)}%, доля флагов ${Math.round(flaggedRatio * 100)}%.`
+    : `The AI-text layer checked review wording for generated-language risk: ${flaggedReviews} signal(s), mean score ${Math.round(scoreMean * 100)}%, flagged share ${Math.round(flaggedRatio * 100)}%.`;
 }
 
 function buildUncertaintyDetectorCard(summary: Record<string, unknown> | undefined, locale: Locale): DetectorCardData | null {
@@ -594,6 +781,34 @@ function buildUncertaintyDetectorCard(summary: Record<string, unknown> | undefin
       locale === "ru"
         ? "Отправляет неоднозначные, конфликтующие или out-of-domain отзывы на ручную модерацию вместо жесткого ярлыка."
         : "Routes ambiguous, conflicting, or out-of-domain reviews into manual moderation instead of forcing a hard label.",
+    score,
+    severity: severityFromScore(score),
+    status: detectorStatusFromScore(score),
+  };
+}
+
+function buildAiTextDetectorCard(summary: Record<string, unknown> | undefined, locale: Locale): DetectorCardData | null {
+  if (!summary) {
+    return null;
+  }
+
+  const flaggedReviews = Number(summary.ai_text_flagged_reviews || 0);
+  const flaggedRatio = Number(summary.ai_text_flagged_ratio || 0);
+  const scoreMean = Number(summary.ai_text_score_mean || 0);
+  const evaluatedReviews = Number(summary.ai_text_reviews || 0);
+  if (evaluatedReviews <= 0 || (flaggedReviews <= 0 && scoreMean < 0.34)) {
+    return null;
+  }
+
+  const score = Math.round(clamp((flaggedRatio * 0.52 + scoreMean * 0.48) * 100, 12, 94));
+
+  return {
+    id: "ai-text-review-risk",
+    name: locale === "ru" ? "Проверка на AI" : "AI Text Check",
+    description:
+      locale === "ru"
+        ? "Оценивает признаки машинно выверенной подачи: ровный рекламный ритм, повторяемые речевые связки и нехватку проверяемых деталей покупки."
+        : "Looks for polished, template-like, weakly grounded review language; used as an auxiliary moderation signal.",
     score,
     severity: severityFromScore(score),
     status: detectorStatusFromScore(score),
@@ -646,7 +861,7 @@ function buildImageOcrDetectorCard(summary: Record<string, unknown> | undefined,
     name: locale === "ru" ? "OCR текста на фото" : "Photo OCR Text",
     description:
       locale === "ru"
-        ? "Извлекает текст с фото и ловит promo/sale-надписи, watermark, contacts, marketplace branding и чужие магазинные следы."
+        ? "Извлекает текст с фото и ловит промо-надписи, распродажи, водяные знаки, контакты, брендинг маркетплейса и чужие магазинные следы."
         : "Extracts image text and flags promo/sale copy, watermarks, contacts, marketplace branding, and foreign store traces.",
     score,
     severity: severityFromScore(score),
@@ -704,7 +919,7 @@ function buildImageAlignmentDetectorCard(summary: Record<string, unknown> | unde
     name: locale === "ru" ? "Фото vs текст отзыва" : "Photo vs Review Text",
     description:
       locale === "ru"
-        ? "Сравнивает покупательское фото с текстом отзыва и предполагаемой категорией товара через CLIP/ViT similarity."
+        ? "Сравнивает покупательское фото с текстом отзыва и предполагаемой категорией товара через сходство CLIP/ViT."
         : "Compares customer photos against the review text and inferred product category using CLIP/ViT similarity.",
     score,
     severity: severityFromScore(score),
@@ -794,6 +1009,12 @@ function synthesizeDetectorCards(
             score: scoreFromCount(["repetition", "duplicate", "similarity", "схож"], riskScore * 0.55),
           },
           {
+            id: "weak-product-evidence",
+            name: "Слабая конкретика в отзыве",
+            description: "Подсвечивает общие фразы без проверяемого опыта использования, размера, дефекта, доставки или контекста покупки.",
+            score: scoreFromCount(["weak", "generic", "short", "detail", "конкрет"], riskScore * 0.43),
+          },
+          {
             id: "burst-posting",
             name: "Паттерн всплеска публикаций",
             description: "Подсвечивает короткие интервалы с необычно плотной активностью.",
@@ -813,7 +1034,7 @@ function synthesizeDetectorCards(
           },
           {
             id: "sentiment-repetition",
-            name: "Повтор sentiment-паттернов",
+            name: "Повтор тональных шаблонов",
             description: "Определяет переиспользование одинаковой полярности и шаблонного эмоционального фрейминга.",
             score: scoreFromCount(["sentiment", "promotional", "templated", "эмоцион"], riskScore * 0.44),
           },
@@ -830,6 +1051,12 @@ function synthesizeDetectorCards(
             name: "Text Similarity Spike",
             description: "Flags near-duplicate review bodies and repeated lexical structures.",
             score: scoreFromCount(["repetition", "duplicate", "similarity"], riskScore * 0.55),
+          },
+          {
+            id: "weak-product-evidence",
+            name: "Weak Product Evidence",
+            description: "Highlights generic claims without checkable usage, sizing, defect, delivery, or purchase-context details.",
+            score: scoreFromCount(["weak", "generic", "short", "detail"], riskScore * 0.43),
           },
           {
             id: "burst-posting",
@@ -865,6 +1092,7 @@ function synthesizeDetectorCards(
 
   const slangCard = buildSlangDetectorCard(summary, locale);
   const uncertaintyCard = buildUncertaintyDetectorCard(summary, locale);
+  const aiTextCard = buildAiTextDetectorCard(summary, locale);
   const imageAlignmentCard = buildImageAlignmentDetectorCard(summary, locale);
   const stockMarketingCard = buildStockMarketingDetectorCard(summary, locale);
   const syntheticImageCard = buildSyntheticImageDetectorCard(summary, locale);
@@ -875,6 +1103,7 @@ function synthesizeDetectorCards(
     ...specs,
     ...(slangCard ? [slangCard] : []),
     ...(uncertaintyCard ? [uncertaintyCard] : []),
+    ...(aiTextCard ? [aiTextCard] : []),
     ...(imageAlignmentCard ? [imageAlignmentCard] : []),
     ...(stockMarketingCard ? [stockMarketingCard] : []),
     ...(syntheticImageCard ? [syntheticImageCard] : []),
@@ -891,53 +1120,378 @@ function synthesizeDetectorCards(
   }));
 }
 
+type ActivityBucket = "hour" | "day" | "week" | "month";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const russianMonths = new Map([
+  ["января", 0],
+  ["январь", 0],
+  ["янв", 0],
+  ["февраля", 1],
+  ["февраль", 1],
+  ["фев", 1],
+  ["марта", 2],
+  ["март", 2],
+  ["мар", 2],
+  ["апреля", 3],
+  ["апрель", 3],
+  ["апр", 3],
+  ["мая", 4],
+  ["май", 4],
+  ["июня", 5],
+  ["июнь", 5],
+  ["июля", 6],
+  ["июль", 6],
+  ["августа", 7],
+  ["август", 7],
+  ["авг", 7],
+  ["сентября", 8],
+  ["сентябрь", 8],
+  ["сен", 8],
+  ["сент", 8],
+  ["октября", 9],
+  ["октябрь", 9],
+  ["окт", 9],
+  ["ноября", 10],
+  ["ноябрь", 10],
+  ["ноя", 10],
+  ["декабря", 11],
+  ["декабрь", 11],
+  ["дек", 11],
+]);
+const englishMonths = new Map([
+  ["january", 0],
+  ["jan", 0],
+  ["february", 1],
+  ["feb", 1],
+  ["march", 2],
+  ["mar", 2],
+  ["april", 3],
+  ["apr", 3],
+  ["may", 4],
+  ["june", 5],
+  ["jun", 5],
+  ["july", 6],
+  ["jul", 6],
+  ["august", 7],
+  ["aug", 7],
+  ["september", 8],
+  ["sep", 8],
+  ["sept", 8],
+  ["october", 9],
+  ["oct", 9],
+  ["november", 10],
+  ["nov", 10],
+  ["december", 11],
+  ["dec", 11],
+]);
+
 function buildActivitySeries(reviews: Array<Record<string, unknown>>, locale: Locale) {
   const dated = reviews
-    .map((review) => ({
-      date: String(review.date || "Undated"),
-      suspicious: Number(review.suspicious_probability || 0) >= 0.55 ? 1 : 0,
-    }))
-    .filter((item) => item.date && item.date !== "Undated");
+    .map((review) => {
+      const parsedDate = parseReviewTimestamp(review);
+      if (!parsedDate) {
+        return null;
+      }
+      return {
+        timestamp: parsedDate.getTime(),
+        suspicious: reviewLooksSuspicious(review) ? 1 : 0,
+      };
+    })
+    .filter((item): item is { timestamp: number; suspicious: number } => item !== null)
+    .sort((left, right) => left.timestamp - right.timestamp);
 
   if (!dated.length) {
-    return locale === "ru"
+    return reviews.length
       ? [
-          { label: "T-6", reviews: 9, suspicious: 1 },
-          { label: "T-5", reviews: 12, suspicious: 2 },
-          { label: "T-4", reviews: 17, suspicious: 2 },
-          { label: "T-3", reviews: 22, suspicious: 4 },
-          { label: "T-2", reviews: 19, suspicious: 5 },
-          { label: "T-1", reviews: 24, suspicious: 7 },
-          { label: "Сейчас", reviews: 18, suspicious: 4 },
+          {
+            label: locale === "ru" ? "Без даты" : "Undated",
+            reviews: reviews.length,
+            suspicious: reviews.filter(reviewLooksSuspicious).length,
+          },
         ]
-      : [
-          { label: "T-6", reviews: 9, suspicious: 1 },
-          { label: "T-5", reviews: 12, suspicious: 2 },
-          { label: "T-4", reviews: 17, suspicious: 2 },
-          { label: "T-3", reviews: 22, suspicious: 4 },
-          { label: "T-2", reviews: 19, suspicious: 5 },
-          { label: "T-1", reviews: 24, suspicious: 7 },
-          { label: "Now", reviews: 18, suspicious: 4 },
-        ];
+      : [];
   }
 
+  const minDate = new Date(dated[0].timestamp);
+  const maxDate = new Date(dated[dated.length - 1].timestamp);
+  const bucket = chooseActivityBucket(minDate, maxDate, dated.length);
   const grouped = new Map<string, { reviews: number; suspicious: number }>();
   dated.forEach((item) => {
-    const key = item.date.slice(0, 10);
+    const key = activityBucketKey(new Date(item.timestamp), bucket);
     const current = grouped.get(key) || { reviews: 0, suspicious: 0 };
     current.reviews += 1;
     current.suspicious += item.suspicious;
     grouped.set(key, current);
   });
 
-  return Array.from(grouped.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
-    .slice(-7)
-    .map(([label, value]) => ({
-      label,
+  return activityBucketRange(minDate, maxDate, bucket).map((date) => {
+    const key = activityBucketKey(date, bucket);
+    const value = grouped.get(key) || { reviews: 0, suspicious: 0 };
+    const bucketEnd = activityBucketEnd(date, bucket);
+    return {
+      label: formatActivityLabel(date, bucket, locale, minDate, maxDate),
       reviews: value.reviews,
       suspicious: value.suspicious,
-    }));
+      bucketStart: date.toISOString(),
+      bucketEnd: bucketEnd.toISOString(),
+    };
+  });
+}
+
+function parseReviewTimestamp(review: Record<string, unknown>) {
+  const candidates = [
+    review.date,
+    review.created_at,
+    review.createdAt,
+    review.created,
+    review.timestamp,
+    review.review_date,
+    review.reviewDate,
+    review.published_at,
+    review.publishedAt,
+  ];
+  for (const candidate of candidates) {
+    const parsed = parseDateValue(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function parseDateValue(value: unknown) {
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const milliseconds = value < 10_000_000_000 ? value * 1000 : value;
+    const date = new Date(milliseconds);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const raw = value.trim();
+  if (!raw || raw.toLowerCase() === "undated" || raw.toLowerCase() === "без даты") {
+    return null;
+  }
+  const parsedNative = Date.parse(raw);
+  if (Number.isFinite(parsedNative)) {
+    return new Date(parsedNative);
+  }
+  return parseHumanDate(raw);
+}
+
+function parseHumanDate(raw: string) {
+  const normalized = raw
+    .toLowerCase()
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const now = new Date();
+  const relativeDate = parseRelativeDate(normalized, now);
+  if (relativeDate) {
+    applyTime(relativeDate, normalized);
+    return relativeDate;
+  }
+
+  const numericMatch = normalized.match(/\b(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?\b/);
+  if (numericMatch) {
+    const day = Number(numericMatch[1]);
+    const month = Number(numericMatch[2]) - 1;
+    const year = normalizeDateYear(numericMatch[3] ? Number(numericMatch[3]) : inferReviewYear(month, day, now));
+    return buildValidDate(year, month, day, normalized);
+  }
+
+  const textMatch = normalized.match(/\b(\d{1,2})\s+([a-zа-яё.]+)(?:[,\s]+(\d{2,4}))?\b/i);
+  if (textMatch) {
+    const day = Number(textMatch[1]);
+    const monthToken = textMatch[2].replace(/\.$/, "");
+    const month = russianMonths.get(monthToken) ?? englishMonths.get(monthToken);
+    if (month !== undefined) {
+      const year = normalizeDateYear(textMatch[3] ? Number(textMatch[3]) : inferReviewYear(month, day, now));
+      return buildValidDate(year, month, day, normalized);
+    }
+  }
+
+  return null;
+}
+
+function parseRelativeDate(normalized: string, now: Date) {
+  const date = new Date(now);
+  if (normalized.includes("today") || normalized.includes("сегодня")) {
+    return startOfDay(date);
+  }
+  if (normalized.includes("yesterday") || normalized.includes("вчера")) {
+    date.setDate(date.getDate() - 1);
+    return startOfDay(date);
+  }
+  return null;
+}
+
+function buildValidDate(year: number, month: number, day: number, raw: string) {
+  if (!Number.isFinite(year) || month < 0 || month > 11 || day < 1 || day > 31) {
+    return null;
+  }
+  const date = new Date(year, month, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
+    return null;
+  }
+  applyTime(date, raw);
+  return date;
+}
+
+function normalizeDateYear(year: number) {
+  return year < 100 ? 2000 + year : year;
+}
+
+function inferReviewYear(month: number, day: number, now: Date) {
+  const inferred = new Date(now.getFullYear(), month, day);
+  if (inferred.getTime() - now.getTime() > 31 * DAY_MS) {
+    return now.getFullYear() - 1;
+  }
+  return now.getFullYear();
+}
+
+function applyTime(date: Date, raw: string) {
+  const timeMatch = raw.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+  if (!timeMatch) {
+    return;
+  }
+  date.setHours(Number(timeMatch[1]), Number(timeMatch[2]), Number(timeMatch[3] || 0), 0);
+}
+
+function reviewLooksSuspicious(review: Record<string, unknown>) {
+  const triage = String(review.triage_label || "").toLowerCase();
+  if (triage === "confident_suspicious") {
+    return true;
+  }
+  if (Number(review.is_suspicious || 0) === 1) {
+    return true;
+  }
+  return Number(review.suspicious_probability || 0) >= 0.55;
+}
+
+function chooseActivityBucket(minDate: Date, maxDate: Date, reviewCount: number): ActivityBucket {
+  const spanMs = Math.max(0, maxDate.getTime() - minDate.getTime());
+  const spanDays = spanMs / DAY_MS;
+  if (spanMs <= 36 * HOUR_MS && reviewCount > 1) {
+    return "hour";
+  }
+  if (spanDays <= 62) {
+    return "day";
+  }
+  if (spanDays <= 370) {
+    return "week";
+  }
+  return "month";
+}
+
+function activityBucketRange(minDate: Date, maxDate: Date, bucket: ActivityBucket) {
+  const range: Date[] = [];
+  const cursor = startOfBucket(minDate, bucket);
+  const end = startOfBucket(maxDate, bucket);
+  while (cursor.getTime() <= end.getTime()) {
+    range.push(new Date(cursor));
+    incrementBucket(cursor, bucket);
+  }
+  return range;
+}
+
+function activityBucketKey(date: Date, bucket: ActivityBucket) {
+  const start = startOfBucket(date, bucket);
+  const year = start.getFullYear();
+  const month = String(start.getMonth() + 1).padStart(2, "0");
+  const day = String(start.getDate()).padStart(2, "0");
+  if (bucket === "hour") {
+    return `${year}-${month}-${day}T${String(start.getHours()).padStart(2, "0")}`;
+  }
+  return `${year}-${month}-${day}`;
+}
+
+function activityBucketEnd(date: Date, bucket: ActivityBucket) {
+  const end = startOfBucket(date, bucket);
+  incrementBucket(end, bucket);
+  end.setMilliseconds(end.getMilliseconds() - 1);
+  return end;
+}
+
+function startOfBucket(date: Date, bucket: ActivityBucket) {
+  if (bucket === "hour") {
+    const start = new Date(date);
+    start.setMinutes(0, 0, 0);
+    return start;
+  }
+  if (bucket === "week") {
+    return startOfWeek(date);
+  }
+  if (bucket === "month") {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  }
+  return startOfDay(date);
+}
+
+function incrementBucket(date: Date, bucket: ActivityBucket) {
+  if (bucket === "hour") {
+    date.setHours(date.getHours() + 1);
+    return;
+  }
+  if (bucket === "week") {
+    date.setDate(date.getDate() + 7);
+    return;
+  }
+  if (bucket === "month") {
+    date.setMonth(date.getMonth() + 1);
+    return;
+  }
+  date.setDate(date.getDate() + 1);
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function startOfWeek(date: Date) {
+  const start = startOfDay(date);
+  const day = start.getDay() || 7;
+  start.setDate(start.getDate() - day + 1);
+  return start;
+}
+
+function formatActivityLabel(date: Date, bucket: ActivityBucket, locale: Locale, minDate: Date, maxDate: Date) {
+  const dateLocale = locale === "ru" ? "ru-RU" : "en-US";
+  const includeYear = minDate.getFullYear() !== maxDate.getFullYear();
+  if (bucket === "hour") {
+    return new Intl.DateTimeFormat(dateLocale, {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  }
+  if (bucket === "week") {
+    const end = new Date(date);
+    end.setDate(end.getDate() + 6);
+    return `${formatShortDate(date, dateLocale, includeYear)}-${formatShortDate(end, dateLocale, includeYear)}`;
+  }
+  if (bucket === "month") {
+    return new Intl.DateTimeFormat(dateLocale, {
+      month: "short",
+      year: "numeric",
+    }).format(date);
+  }
+  return formatShortDate(date, dateLocale, includeYear);
+}
+
+function formatShortDate(date: Date, locale: string, includeYear: boolean) {
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    ...(includeYear ? { year: "2-digit" } : {}),
+  }).format(date);
 }
 
 function buildSuspiciousReviews(reviews: Array<Record<string, unknown>>, locale: Locale): SuspiciousReviewRow[] {
@@ -1015,6 +1569,10 @@ function buildSuspiciousReviews(reviews: Array<Record<string, unknown>>, locale:
         imageOcrFlag: Number(review.image_ocr_flag || 0) === 1,
         imageOcrText: String(review.image_ocr_text || ""),
         imageOcrLabels: Array.isArray(review.image_ocr_labels) ? review.image_ocr_labels.map(String) : [],
+        aiTextScore: Number(review.ai_text_score || 0),
+        aiTextFlag: Number(review.ai_text_flag || 0) === 1,
+        aiTextLabel: String(review.ai_text_label || "not_evaluated"),
+        aiTextReasons: Array.isArray(review.ai_text_reasons) ? review.ai_text_reasons.map(String) : [],
       } satisfies SuspiciousReviewRow;
     })
     .sort((left, right) => right.suspiciousness - left.suspiciousness);
@@ -1042,7 +1600,7 @@ function buildAnomalyTypesFromReviews(response: ReviewApiResponse, locale: Local
 
   return groupCounts(allReasons)
     .sort((left, right) => right.count - left.count)
-    .slice(0, 6)
+    .slice(0, 12)
     .map((entry) => ({
       type: localizeKnownText(entry.label, locale),
       count: entry.count,
@@ -1065,18 +1623,31 @@ function buildSummaryFallbackAnomalyTypes(
   const duplicatePhotoRatio = Number(summary.duplicate_photo_review_ratio || 0);
   const temporalPhotoRatio = Number(summary.photo_temporal_cluster_ratio || 0);
   const imageMismatchRatio = Number(summary.image_alignment_mismatch_ratio || 0);
-  const photoSignal = Math.max(duplicatePhotoRatio, temporalPhotoRatio, imageMismatchRatio);
+  const stockMarketingRatio = Number(summary.stock_marketing_photo_ratio || 0);
+  const syntheticImageRatio = Number(summary.synthetic_image_ratio || 0);
+  const imageOcrRatio = Number(summary.image_ocr_flagged_ratio || 0);
+  const aiTextRatio = Number(summary.ai_text_flagged_ratio || 0);
+  const languageTemplateRatio = Number(summary.slang_template_cluster_ratio || summary.slang_flagged_ratio || 0);
+  const oodAlertRatio = Number(summary.ood_alert_ratio || 0);
 
   const candidates = [
     { type: "Suspicious review ratio", value: suspiciousRatio },
     { type: "Behavioral manipulation score", value: manipulationMean },
     { type: "Peak suspicious probability", value: highestProbability },
     { type: "Manual review uncertainty", value: manualReviewRatio },
-    { type: "Photo forensics signal", value: photoSignal },
+    { type: "Duplicate photo signal", value: duplicatePhotoRatio },
+    { type: "Photo temporal cluster signal", value: temporalPhotoRatio },
+    { type: "Image/text mismatch signal", value: imageMismatchRatio },
+    { type: "Stock/marketing photo signal", value: stockMarketingRatio },
+    { type: "Synthetic image signal", value: syntheticImageRatio },
+    { type: "Photo OCR signal", value: imageOcrRatio },
+    { type: "AI-generated text signal", value: aiTextRatio },
+    { type: "Language template signal", value: languageTemplateRatio },
+    { type: "Out-of-domain uncertainty", value: oodAlertRatio },
   ]
     .filter((item) => Number.isFinite(item.value) && item.value > 0)
     .sort((left, right) => right.value - left.value)
-    .slice(0, 5)
+    .slice(0, 12)
     .map((item) => ({
       type: localizeKnownText(item.type, locale),
       count: Math.max(1, Math.round(clamp(item.value, 0.01, 1) * 100)),
@@ -1178,6 +1749,7 @@ function transformReviewModeResponse(response: ReviewApiResponse, sourceMode: So
   const stockMarketingInsight = buildStockMarketingInsight(summary, locale);
   const syntheticImageInsight = buildSyntheticImageInsight(summary, locale);
   const imageOcrInsight = buildImageOcrInsight(summary, locale);
+  const aiTextInsight = buildAiTextInsight(summary, locale);
   const explainabilitySeed =
     anomalyTypes.length > 0 ? anomalyTypes : buildSummaryFallbackAnomalyTypes(summary, reviews.length, locale);
   const keyInsights = Array.isArray(response.highlights?.notes)
@@ -1206,6 +1778,9 @@ function transformReviewModeResponse(response: ReviewApiResponse, sourceMode: So
   if (imageOcrInsight) {
     keyInsights.unshift(imageOcrInsight);
   }
+  if (aiTextInsight) {
+    keyInsights.unshift(aiTextInsight);
+  }
   if (syntheticImageInsight) {
     keyInsights.push(syntheticImageInsight);
   }
@@ -1231,6 +1806,7 @@ function transformReviewModeResponse(response: ReviewApiResponse, sourceMode: So
       manualReviewCount,
       verdict: verdictFromRisk(riskScore, suspiciousCount, manualReviewCount, locale),
     },
+    collectionTrace: buildCollectionTrace(response, locale),
     trustBreakdown: [
       { name: locale === "ru" ? "Надежные" : "Trustworthy", value: Math.max(confidentCleanCount, 0), fill: "#0f766e" },
       { name: locale === "ru" ? "Подозрительные" : "Suspicious", value: Math.max(suspiciousCount, 0), fill: "#c35e43" },
@@ -1260,7 +1836,7 @@ function transformRecordsModeResponse(response: ReviewApiResponse, locale: Local
   );
   const anomalyTypes = groupCounts(anomalyReasons)
     .sort((left, right) => right.count - left.count)
-    .slice(0, 6)
+    .slice(0, 12)
     .map((entry) => ({ type: localizeKnownText(entry.label, locale), count: entry.count || 1 }));
 
   const suspiciousReviews: SuspiciousReviewRow[] = predictions
@@ -1319,6 +1895,10 @@ function transformRecordsModeResponse(response: ReviewApiResponse, locale: Local
       imageOcrFlag: false,
       imageOcrText: "",
       imageOcrLabels: [],
+      aiTextScore: Number(row.ai_text_score || 0),
+      aiTextFlag: Number(row.ai_text_flag || 0) === 1,
+      aiTextLabel: String(row.ai_text_label || "not_evaluated"),
+      aiTextReasons: Array.isArray(row.ai_text_reasons) ? row.ai_text_reasons.map(String) : [],
     }));
 
   const syntheticActivity = predictions.slice(0, 7).map((row, index) => ({
@@ -1357,7 +1937,8 @@ function transformRecordsModeResponse(response: ReviewApiResponse, locale: Local
           : locale === "ru"
             ? "Текущий структурированный датасет не показывает сильных сигналов накрутки рейтингов."
             : "The current structured dataset does not expose strong rating manipulation signals.",
-    },
+      },
+    collectionTrace: buildCollectionTrace(response, locale),
     trustBreakdown: [
       { name: locale === "ru" ? "Надежные" : "Trustworthy", value: Math.max(totalRecords - suspiciousCount, 0), fill: "#0f766e" },
       { name: locale === "ru" ? "Подозрительные" : "Suspicious", value: suspiciousCount, fill: "#c35e43" },
@@ -1385,7 +1966,7 @@ function transformRecordsModeResponse(response: ReviewApiResponse, locale: Local
         : "Site-level mode evaluates users, items, IPs, and timestamps rather than only page-visible review text.",
       Number(response.summary?.slang_template_cluster_ratio || 0) >= 0.18
         ? locale === "ru"
-          ? "Языковой слой нашел повторяющиеся slang-шаблоны в структурированной выборке."
+          ? "Языковой слой нашёл повторяющиеся сленговые шаблоны в структурированной выборке."
           : "The language layer found repeated slang templates across the structured records sample."
         : Number(response.summary?.slang_domain_confidence || 0) >= 0.35
           ? locale === "ru"
@@ -1396,10 +1977,10 @@ function transformRecordsModeResponse(response: ReviewApiResponse, locale: Local
             : "Autoencoder-based anomaly scoring is strongest when the supplied records are complete and well-formed.",
       slangFlaggedRatings
         ? locale === "ru"
-          ? `Пост-хок slang-анализ пометил ${slangFlaggedRatings} записей как hype-heavy или слабо grounded language.`
+            ? `Пост-анализ сленга пометил ${slangFlaggedRatings} записей как хайповые или слабо привязанные к реальному опыту.`
           : `Post-hoc slang analysis flagged ${slangFlaggedRatings} record(s) for hype-heavy or weakly grounded comment language.`
         : locale === "ru"
-          ? "Пост-хок slang-анализ не нашел сильной концентрации hype-heavy language."
+          ? "Пост-анализ сленга не нашёл сильной концентрации хайпового языка."
           : "Post-hoc slang analysis did not find a strong concentration of hype-heavy comment language.",
       suspiciousUsers.length
         ? locale === "ru"

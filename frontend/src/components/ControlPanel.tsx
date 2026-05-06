@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { ChevronDown, Globe, Layers3, Sparkles, WandSparkles } from "lucide-react";
+import { Globe, Layers3, Sparkles, WandSparkles } from "lucide-react";
 import { useLocale } from "../i18n";
 import type { AnalysisDepth, AnalysisFormValues, AppStatus, SourceMode } from "../types/analysis";
 
@@ -53,12 +53,12 @@ export function ControlPanel({ values, status, onChange, onSubmit, onLoadDemo }:
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.08 }}
-      className="surface-card p-6 sm:p-7"
+      className="surface-card p-6 sm:p-8"
     >
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
           <p className="eyebrow">{copy.controlPanel.eyebrow}</p>
-          <h2 className="mt-3 break-words font-display text-3xl text-ink">{copy.controlPanel.title}</h2>
+          <h2 className="mt-3 break-words font-display text-3xl font-bold text-ink sm:text-4xl">{copy.controlPanel.title}</h2>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-muted">{copy.controlPanel.description}</p>
         </div>
         <span className="badge-soft self-start border-accent/20 bg-accent-soft text-accent">
@@ -66,7 +66,7 @@ export function ControlPanel({ values, status, onChange, onSubmit, onLoadDemo }:
         </span>
       </div>
 
-      <div className="mt-6 grid gap-5 xl:grid-cols-12">
+      <div className="mt-7 grid gap-5 xl:grid-cols-12">
         <SectionCard
           title={copy.controlPanel.sourceSectionTitle}
           helper={copy.controlPanel.sourceSectionHelper}
@@ -81,18 +81,18 @@ export function ControlPanel({ values, status, onChange, onSubmit, onLoadDemo }:
                   key={mode.value}
                   type="button"
                   onClick={() => onChange("sourceMode", mode.value)}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
+                  className={`rounded-[22px] border px-4 py-4 text-left shadow-soft transition duration-300 hover:-translate-y-0.5 ${
                     active
-                      ? "border-accent/30 bg-accent-soft shadow-float"
-                      : "border-slate-200/80 bg-white/80 hover:border-accent/20 hover:bg-white"
+                      ? "border-accent/30 bg-accent-soft shadow-float ring-4 ring-accent/10"
+                      : "border-slate-200/80 bg-white/82 hover:border-accent/20 hover:bg-white hover:shadow-float"
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <span className={`mt-0.5 rounded-xl p-2 ${active ? "bg-white text-accent" : "bg-slate-100 text-ink"}`}>
-                      <Icon className="h-4 w-4" />
+                    <span className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${active ? "bg-white text-accent shadow-sm" : "bg-slate-100 text-ink"}`}>
+                      <Icon className="h-6 w-6" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="break-words text-sm font-semibold text-ink">{mode.label}</p>
+                      <p className="break-words text-sm font-bold text-ink">{mode.label}</p>
                       <p className="mt-1 text-xs leading-6 text-muted">{mode.helper}</p>
                     </div>
                   </div>
@@ -162,7 +162,7 @@ export function ControlPanel({ values, status, onChange, onSubmit, onLoadDemo }:
           helper={copy.controlPanel.fields.analysisModeHelper}
           className="xl:col-span-4"
         >
-          <div className="grid gap-3 2xl:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
             {depthModes.map((mode) => {
               const active = values.analysisDepth === mode.value;
               return (
@@ -170,15 +170,17 @@ export function ControlPanel({ values, status, onChange, onSubmit, onLoadDemo }:
                   key={mode.value}
                   type="button"
                   onClick={() => onChange("analysisDepth", mode.value)}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
+                  className={`rounded-[22px] border px-4 py-4 text-left shadow-soft transition duration-300 hover:-translate-y-0.5 ${
                     active
-                      ? "border-accent/30 bg-accent-soft shadow-float"
-                      : "border-slate-200/80 bg-white/80 hover:border-accent/20 hover:bg-white"
+                      ? "border-accent/30 bg-accent-soft shadow-float ring-4 ring-accent/10"
+                      : "border-slate-200/80 bg-white/82 hover:border-accent/20 hover:bg-white hover:shadow-float"
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <WandSparkles className="h-4 w-4 text-accent" />
-                    <span className="break-words text-sm font-semibold text-ink">{mode.label}</span>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-warning/10 text-warning">
+                      <WandSparkles className="h-5 w-5" />
+                    </span>
+                    <span className="break-words text-sm font-bold text-ink">{mode.label}</span>
                   </div>
                   <p className="mt-2 text-xs leading-5 text-muted">{mode.helper}</p>
                 </button>
@@ -187,58 +189,17 @@ export function ControlPanel({ values, status, onChange, onSubmit, onLoadDemo }:
           </div>
         </SectionCard>
 
-        <details className="surface-card-soft group overflow-hidden p-5 xl:col-span-6">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="break-words text-sm font-semibold text-ink">{copy.controlPanel.fields.advancedTitle}</p>
-              <p className="mt-1 text-xs leading-6 text-muted">
-                {copy.controlPanel.fields.advancedHelper}
-              </p>
-            </div>
-            <ChevronDown className="h-4 w-4 text-muted transition group-open:rotate-180" />
-          </summary>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field
-              label={copy.controlPanel.fields.manualWait}
-              helper={copy.controlPanel.fields.manualWaitHelper}
-            >
-              <input
-                type="number"
-                min={0}
-                max={30000}
-                step={500}
-                inputMode="numeric"
-                value={values.waitMs}
-                onChange={(event) => onChange("waitMs", event.target.value)}
-                className={inputClass}
-                placeholder={copy.controlPanel.placeholders.waitMs}
-              />
-            </Field>
-            <Field
-              label={copy.controlPanel.fields.snapshotHelper}
-              helper={copy.controlPanel.fields.snapshotHelperText}
-            >
-              <input
-                value={values.sourceUrl}
-                onChange={(event) => onChange("sourceUrl", event.target.value)}
-                className={inputClass}
-                placeholder={copy.controlPanel.placeholders.snapshotHelper}
-              />
-            </Field>
-          </div>
-        </details>
-
-        <section className="surface-card-soft p-5 xl:col-span-6">
+        <section className="surface-card-soft bg-gradient-to-r from-white/86 via-accent-soft/40 to-white/78 p-5 xl:col-span-12">
           <div className="mb-4">
-            <p className="text-sm font-semibold text-ink">{copy.controlPanel.title}</p>
-            <p className="mt-1 text-xs leading-6 text-muted">{copy.controlPanel.description}</p>
+            <p className="text-sm font-bold text-ink">{copy.controlPanel.submitTitle}</p>
+            <p className="mt-1 text-xs leading-6 text-muted">{copy.controlPanel.submitDescription}</p>
           </div>
           <div className="flex flex-col gap-3 lg:flex-row">
             <button
               type="button"
               onClick={onSubmit}
               disabled={isBusy}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-ink px-6 py-4 text-sm font-semibold text-white shadow-premium transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="primary-button flex-1 justify-center px-6 py-4 shadow-premium"
             >
               {isBusy ? copy.controlPanel.actions.analyzing : copy.controlPanel.actions.analyze}
             </button>
@@ -246,7 +207,7 @@ export function ControlPanel({ values, status, onChange, onSubmit, onLoadDemo }:
               type="button"
               onClick={onLoadDemo}
               disabled={isBusy}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white/80 px-5 py-4 text-sm font-semibold text-ink transition hover:-translate-y-0.5 hover:border-accent/20 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="secondary-button justify-center px-5 py-4"
             >
               {copy.controlPanel.actions.demo}
             </button>
@@ -269,9 +230,9 @@ function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={`surface-card-soft min-w-0 p-5 ${className}`}>
+    <section className={`surface-card-soft min-w-0 p-5 sm:p-6 ${className}`}>
       <div className="mb-4">
-        <p className="break-words text-sm font-semibold text-ink">{title}</p>
+        <p className="break-words text-sm font-bold text-ink">{title}</p>
         <p className="mt-1 text-xs leading-6 text-muted">{helper}</p>
       </div>
       <div className="space-y-4">{children}</div>

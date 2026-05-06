@@ -11,6 +11,7 @@ data/external_temp/
 *.rar
 *.zip
 *.7z
+*.docx
 frontend/dist/
 frontend/node_modules/
 frontend/*.tsbuildinfo

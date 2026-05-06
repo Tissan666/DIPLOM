@@ -3,9 +3,7 @@ import { useLocale } from "../i18n";
 import {
   formatBytes,
   parseApiResponse,
-  parseCsvInput,
-  parseExcelInput,
-  parseHtmlInput,
+  parseFileInput,
   parseJsonInput,
   type ImportSourceTab,
   type ParsedImportResult,
@@ -62,7 +60,7 @@ export function useDataImport({
   onFileNameChange,
 }: UseDataImportOptions): UseDataImportResult {
   const { locale } = useLocale();
-  const [activeTab, setActiveTab] = useState<ImportSourceTab>("json");
+  const [activeTab, setActiveTab] = useState<ImportSourceTab>("file");
   const [apiUrl, setApiUrl] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<ImportStatus>("idle");
@@ -167,17 +165,7 @@ export function useDataImport({
     await runImport(async () => {
       const sourceName = file.name;
       const sizeBytes = file.size;
-
-      if (activeTab === "json") {
-        return { result: parseJsonInput(await file.text()), sourceName, sizeBytes };
-      }
-      if (activeTab === "csv") {
-        return { result: parseCsvInput(await file.text()), sourceName, sizeBytes };
-      }
-      if (activeTab === "excel") {
-        return { result: await parseExcelInput(await file.arrayBuffer()), sourceName, sizeBytes };
-      }
-      return { result: parseHtmlInput(await file.text(), sourceName), sourceName, sizeBytes };
+      return { result: await parseFileInput(file), sourceName, sizeBytes };
     });
   };
 
@@ -190,12 +178,24 @@ export function useDataImport({
     }
 
     await runImport(async () => {
-      const response = await fetch(sourceUrl, { method: "GET" });
+      const response = await fetch("/api/import-source", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: sourceUrl }),
+      });
       if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        const backendMessage =
+          errorPayload && typeof errorPayload === "object" && "message" in errorPayload
+            ? String((errorPayload as { message?: unknown }).message || "")
+            : "";
         throw new Error(
-          locale === "ru"
+          backendMessage ||
+            (locale === "ru"
             ? `Не удалось получить API-источник: HTTP ${response.status}.`
-            : `Could not fetch the API source: HTTP ${response.status}.`
+            : `Could not fetch the API source: HTTP ${response.status}.`)
         );
       }
       const result = await parseApiResponse(response, sourceUrl);
@@ -243,12 +243,19 @@ function localizeImportError(message: string, locale: "en" | "ru") {
   const exactMap: Record<string, string> = {
     "Could not import the selected data source.": "Не удалось импортировать выбранный источник данных.",
     "The CSV file is empty.": "CSV-файл пуст.",
+    "The JSONL file is empty.": "JSONL-файл пуст.",
     "No worksheet was found in the Excel file.": "В Excel-файле не найден ни один лист.",
     "Could not extract any records. Check the source structure and try again.":
       "Не удалось извлечь ни одной записи. Проверь структуру источника и попробуй снова.",
     "The source does not contain a record array. Expected a JSON array or an object with a `records` field.":
       "Источник не содержит массива записей. Ожидается JSON-массив или объект с полем `records`.",
+    "Unsupported file format. Upload JSON, JSONL, CSV, TSV, Excel, or HTML.":
+      "Неподдерживаемый формат файла. Загрузите JSON, JSONL, CSV, TSV, Excel или HTML.",
   };
+
+  if (message.startsWith("Invalid JSONL record on line ")) {
+    return message.replace("Invalid JSONL record on line ", "Некорректная JSONL-запись в строке ");
+  }
 
   return exactMap[message] || message;
 }

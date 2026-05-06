@@ -32,40 +32,121 @@ const translations = {
       rowsAvailable: "rows available",
       tablePreview: "Table preview",
       detectorPreview: "Detector preview",
-      explainabilityPreview: "Explainability preview",
+      explainabilityPreview: "Explanation preview",
       sourceLoaded: "Source loaded",
       progress: "Progress",
       complete: "complete",
     },
     hero: {
-      eyebrow: "AI + ML Review Integrity System",
-      title: "Detect rating manipulation and suspicious review behavior with a live analytical workspace.",
+      eyebrow: "Partner review risk control",
+      title: "Detect review manipulation before it damages brand trust.",
       description:
-        "A premium dashboard for thesis defense and product demonstration. It combines scraping, NLP, anomaly detection, behavior signals, and moderation-oriented explainability in one unified interface.",
-      primaryCta: "Check page",
-      secondaryCta: "View demo",
+        "A business-facing system for companies that sell through contractors, dealers, marketplaces, or partner storefronts. It helps verify whether external reviews can be trusted before cooperation is expanded.",
+      audienceLine: "For manufacturers, marketplaces, retailers, and brand protection teams.",
+      primaryCta: "Run review check",
+      secondaryCta: "Open demo",
       badges: {
-        nlp: "NLP analysis",
-        anomaly: "Anomaly detection",
-        patterns: "Suspicious patterns",
-        scraping: "Scraping + ML",
+        nlp: "Review text analysis",
+        anomaly: "Rating anomalies",
+        patterns: "Partner risk signals",
+        scraping: "Adaptive data import",
       },
-      previewEyebrow: "Preview Analytics",
-      previewTitle: "Live risk snapshot",
-      riskScore: "Risk score",
+      flowSteps: ["Data", "Analysis", "Risk report"],
+      previewEyebrow: "Preview analytics",
+      previewTitle: "What happens after launch",
+      onboardingTitle: "No metrics before the check",
+      onboardingDescription:
+        "The first screen explains the workflow. Real scores, charts, and suspicious reviews appear only after you upload data or open the demo report.",
+      onboardingSteps: [
+        "Upload a file, paste HTML, enter a page URL, or connect an API source.",
+        "The system normalizes reviews and searches for rating manipulation signals.",
+        "You receive a risk report with reasons and items for manual review.",
+      ],
+      outputTitle: "After analysis the report will show",
+      outputItems: [
+        "overall risk profile",
+        "why the system flagged the page",
+        "suspicious review examples",
+        "recommended manual checks",
+      ],
+      reportPreviewTitle: "Future report structure",
+      reportPreviewDescription: "A visual outline of the blocks that appear only after analysis.",
+      reportPreviewBadge: "after launch",
+      reportPreviewRows: ["Risk profile", "Evidence layer", "Manual review queue"],
+      analysisScope: ["review text", "posting rhythm", "rating shifts", "author patterns"],
+      decisionLabel: "System verdict",
+      evidenceTitle: "Why risk is elevated",
+      recommendedAction: "Recommended action",
+      recommendedActionText: "Send flagged reviews and author clusters to manual review before trusting the partner page.",
+      riskScore: "Risk",
       reviewActivity: "Review activity",
-      recentCadence: "Recent cadence pattern",
+      reviewVolume: "Review volume",
+      recentCadence: "Publication spike detected",
       manipulationProbability: "Manipulation probability",
       confidence: "Confidence",
       flaggedReviews: "Flagged reviews",
       manualReview: "Manual review",
+      insightsTitle: "Strongest warning signals",
+      insights: [
+        "Unnatural review burst after a quiet period",
+        "Repeated promotional wording across different authors",
+        "Extreme ratings with weak product-specific details",
+      ],
+    },
+    businessValue: {
+      eyebrow: "Business scenario",
+      title: "For brands that need to trust partner review quality",
+      description:
+        "The service helps a company verify whether an external seller, contractor, dealer, or marketplace page is building trust honestly or hiding reputational risk behind inflated ratings.",
+      scenarioTitle: "Typical use case",
+      scenarioText:
+        "A partner reports that product feedback is excellent on a third-party site. Before expanding cooperation, the brand runs this page through the system and receives a risk profile: suspicious review clusters, rating bursts, weak evidence, and items that require manual review.",
+      scenarioSteps: [
+        "Partner shares an external page with strong ratings.",
+        "The company uploads a file, HTML page, or API source.",
+        "The system returns risk signals and reviews for manual follow-up.",
+      ],
+      audienceTitle: "Who needs it",
+      audience: [
+        {
+          title: "Large manufacturers",
+          description: "Control how products are represented by dealers, distributors, and regional partners.",
+        },
+        {
+          title: "Marketplaces and retail chains",
+          description: "Detect sellers that inflate ratings and damage buyer trust across the platform.",
+        },
+        {
+          title: "Brand safety teams",
+          description: "Reduce reputation, legal, and customer-support risks before they become public incidents.",
+        },
+      ],
+      risksTitle: "Signals the system looks for",
+      risks: [
+        {
+          title: "Review bursts",
+          description: "Many similar reviews appear in a short period after long silence.",
+        },
+        {
+          title: "Text similarity",
+          description: "Different authors repeat the same phrasing, selling points, or emotional template.",
+        },
+        {
+          title: "Rating imbalance",
+          description: "The rating curve looks too positive or changes sharply without a natural explanation.",
+        },
+        {
+          title: "Weak evidence",
+          description: "Reviews praise the product but lack concrete usage details, photos, or credible context.",
+        },
+      ],
     },
     controlPanel: {
-      eyebrow: "Main Analysis Workspace",
-      title: "Control panel",
-      description: "Compact controls for source selection, backend-managed collection, and analysis depth.",
+      eyebrow: "Review check launch",
+      title: "Start a partner page analysis",
+      description: "Choose the source, collection depth, and run the model to receive a business-readable risk report.",
       sourceSectionTitle: "Data source",
-      sourceSectionHelper: "Choose how the detector should ingest the next analysis sample.",
+      sourceSectionHelper: "Choose how the system should receive the review sample for analysis.",
       sourceModes: {
         url: {
           helper: "Fetch a live marketplace page through ScrapingBee.",
@@ -74,8 +155,8 @@ const translations = {
           helper: "Paste or upload a local snapshot for deterministic testing.",
         },
         records: {
-          label: "Site Data",
-          helper: "Run full rating manipulation analysis on structured records.",
+          label: "Structured data",
+          helper: "Run full rating manipulation analysis on prepared review records.",
         },
       },
       fields: {
@@ -86,7 +167,7 @@ const translations = {
         htmlSource: "HTML source",
         htmlSourceHelper: "Paste raw HTML from the saved page snapshot.",
         analysisModeTitle: "Analysis mode",
-        analysisModeHelper: "Choose how aggressive and patient the detector should be for the next run.",
+        analysisModeHelper: "Choose the depth of the next review check.",
         advancedTitle: "Advanced settings",
         advancedHelper: "Optional overrides for power users and debugging sessions.",
         manualWait: "Manual wait override",
@@ -117,18 +198,21 @@ const translations = {
         snapshotHelper: "optional source label",
       },
       actions: {
-        analyze: "Check page",
+        analyze: "Run review check",
         analyzing: "Analyzing...",
-        demo: "View demo",
+        demo: "Show demo report",
       },
+      submitTitle: "Ready to analyze",
+      submitDescription: "Start with a real page or open a demo report to show the full workflow safely.",
     },
     resultsPanel: {
-      eyebrow: "Live Analysis Panel",
-      title: "Model-driven review risk dashboard",
+      eyebrow: "Review verification results",
+      title: "Risk report for the checked review page",
       description:
-        "The main results workspace shows the overall risk posture, live review analytics, anomaly distributions, and suspicious evidence in one product-style monitoring view.",
+        "The report combines the overall risk score, review dynamics, anomaly categories, and suspicious examples in one decision-ready view.",
       trustworthySplit: "Trustworthy / suspicious split",
       trendCharts: "Trend and anomaly charts",
+      waitingBadge: "Waiting for analysis",
       unexpectedFailure: "Unexpected analysis failure.",
     },
     resultsSuccess: {
@@ -157,21 +241,37 @@ const translations = {
     },
     pipeline: {
       eyebrow: "Pipeline",
-      title: "Review intelligence pipeline",
+      title: "Review analysis stages",
       description:
-        "A transparent view of the operational stages behind the final risk profile, from collection to final moderation-grade interpretation.",
+        "A transparent view of how the system turns a page or dataset into a final risk profile for business review.",
       active: "Pipeline active",
       complete: "Pipeline complete",
       waiting: "Waiting",
     },
     emptyState: {
-      title: "Ready to profile a review ecosystem",
+      eyebrow: "Report is not generated yet",
+      title: "Choose a source and launch the check",
       description:
-        "Launch an analysis to populate the dashboard with a live risk profile, temporal charts, detector cards, explainability factors, and a ranked suspicious reviews table.",
+        "After analysis, this area turns into a risk report with evidence, anomaly dynamics, and suspicious reviews for manual review.",
+      setupAction: "Choose source",
+      demoAction: "Open demo",
       cards: [
-        "Risk score and confidence",
-        "Temporal and anomaly charts",
-        "Detector and explainability panels",
+        {
+          title: "Risk profile",
+          description: "Overall risk level and model confidence after the check.",
+        },
+        {
+          title: "Evidence",
+          description: "Bursts, repeated wording, rating shifts, and weak review details.",
+        },
+        {
+          title: "Suspicious reviews",
+          description: "Ranked examples that should be checked manually.",
+        },
+        {
+          title: "Decision hint",
+          description: "A short next step before trusting a partner review page.",
+        },
       ],
     },
     errorState: {
@@ -202,6 +302,10 @@ const translations = {
           message: "The manual wait value is too large for the scraping timeout.",
           helper: "Use 0-30000 ms, or leave the field empty and let the analysis mode choose a safe value.",
         },
+        IMPORT_SOURCE_FETCH_FAILED: {
+          message: "The backend could not fetch the API/data source.",
+          helper: "Check that the URL is public and reachable, then retry or upload the file manually.",
+        },
         NETWORK_ERROR: {
           message: "The frontend could not reach the analysis backend.",
           helper: "Make sure Flask is running on port 5000, then retry.",
@@ -218,17 +322,34 @@ const translations = {
           message: "Review model artifacts are missing.",
           helper: "Run the review model training pipeline before analyzing pages.",
         },
+        SCRAPING_BLOCKED: {
+          message: "The marketplace returned a bot-protection or blocked page instead of reviews.",
+          helper: "Use HTML snapshot mode for a stable check, or retry with a lower analysis depth.",
+        },
         SCRAPINGBEE_NOT_CONFIGURED: {
           message:
             "ScrapingBee is not configured on the backend. Set `SCRAPINGBEE_API_KEY` in `.env` or the process environment.",
           helper: "Restart Flask after changing backend environment variables, then retry the request.",
         },
+        SCRAPEDO_NOT_CONFIGURED: {
+          message:
+            "Scrape.do is not configured on the backend. Set `SCRAPEDO_API_KEY` in `.env` or the process environment.",
+          helper: "Restart Flask after changing backend environment variables, then retry the request.",
+        },
         SCRAPING_FETCH_FAILED: {
           message: "ScrapingBee could not fetch the marketplace page.",
-          helper: "Try HTML snapshot mode, reduce the analysis depth, or check ScrapingBee credits/proxy availability.",
+          helper: "Try HTML snapshot mode, reduce the analysis depth, or check external collector credits/proxy availability.",
+        },
+        SCRAPING_RATE_LIMITED: {
+          message: "The external collection service hit a rate limit or credits issue.",
+          helper: "Check ScrapingBee/Scrape.do balance and limits, or use HTML snapshot mode to continue without live scraping.",
+        },
+        SCRAPING_SERVICE_NOT_CONFIGURED: {
+          message: "No live scraping provider is configured on the backend.",
+          helper: "Set `SCRAPINGBEE_API_KEY` or `SCRAPEDO_API_KEY`, restart Flask, or use HTML/file mode.",
         },
         SCRAPING_TIMEOUT: {
-          message: "ScrapingBee did not return the page before the backend timeout.",
+          message: "The external collection service did not return the page before the backend timeout.",
           helper: "Reduce manual wait, use Fast/Standard mode, or paste an HTML snapshot for deterministic analysis.",
         },
         UNKNOWN_ERROR: {
@@ -244,14 +365,14 @@ const translations = {
     },
     detectorGrid: {
       eyebrow: "Detector Cards",
-      title: "Fraud detector surface",
+      title: "Detector signals",
       description:
-        "Each detector card translates raw model and heuristic behavior into a moderation-friendly, product-level signal.",
+        "Each card turns model and heuristic output into a clear product-level risk signal.",
       detectorScore: "Detector score",
       status: "Status",
     },
     explainability: {
-      eyebrow: "Explainability",
+      eyebrow: "Explanation layer",
       title: "Why the system made this decision",
       description:
         "A compact explanation layer for defense, moderation, and model interpretation. It surfaces the strongest factors that drove the final risk profile.",
@@ -265,7 +386,7 @@ const translations = {
     },
     suspiciousTable: {
       eyebrow: "Suspicious Reviews Table",
-      title: "Ranked suspicious review evidence",
+      title: "Ranked suspicious review examples",
       description:
         "A compact moderation-oriented table with sort, filter, and language-aware evidence for the most suspicious reviews.",
       filterPlaceholder: "Filter by text, reason, author, or slang terms",
@@ -299,6 +420,12 @@ const translations = {
       emptyTitle: "No rows match the current filters",
       emptyDescription:
         "Try another search query or relax the severity and language filters to inspect more of the suspicious review set.",
+      summary: {
+        visible: "Visible rows",
+        highRisk: "High risk",
+        manualReview: "Needs review",
+        avgRisk: "Avg. risk",
+      },
       columns: {
         reviewText: "Review text",
         rating: "Rating",
@@ -327,6 +454,7 @@ const translations = {
         photoOcrScore: "Photo OCR",
         syntheticImageHint: "AI/synthetic hint",
         syntheticImageScore: "AI-image hint",
+        aiTextScore: "AI-text score",
         slangRisk: "Slang risk",
         grounding: "Grounding",
         uncertainty: "Uncertainty",
@@ -336,11 +464,15 @@ const translations = {
     dataImport: {
       title: "Structured site data",
       description:
-        "One import workspace for structured payloads, files, and API responses before running the rating manipulation detector.",
+        "Upload a file or connect an API source. The importer detects the file format automatically and maps common columns to review fields.",
+      sources: {
+        file: "File",
+        api: "API",
+      },
       expectedStructure: "Expected structure",
-      fetchTitle: "Fetch from an API",
+      fetchTitle: "Fetch from API",
       fetchDescription:
-        "Enter a public endpoint and run a GET request. The importer will try to normalize JSON, CSV, Excel, or HTML responses into site-data records.",
+        "Enter a public endpoint and run a GET request. The importer will detect JSON, JSONL, CSV/TSV, Excel, or HTML responses and normalize them into review records.",
       fetchAction: "Fetch data",
       chooseFile: "Choose file",
       apiPlaceholder: "https://api.example.com/reviews",
@@ -363,12 +495,9 @@ const translations = {
         geo: "geo",
       },
       fileDrop: {
-        json: "Drop a JSON file here or click to upload",
-        csv: "Drop a CSV file here or click to upload",
-        excel: "Drop an Excel file here or click to upload",
-        html: "Drop an HTML file here or click to upload",
+        file: "Drop a file here or click to upload",
         helper:
-          "files are supported here. After upload, the importer will show a preview and validate the structure before analysis starts.",
+          "Supported formats: Excel, CSV/TSV, JSON/JSONL, HTML. The importer detects the format automatically, shows a preview, and validates the data before analysis.",
       },
       importLoadingTitle: "Normalizing imported data...",
       importLoadingDescription:
@@ -404,49 +533,130 @@ const translations = {
       rowsAvailable: "строк доступно",
       tablePreview: "Превью таблицы",
       detectorPreview: "Превью детекторов",
-      explainabilityPreview: "Превью explainability",
+      explainabilityPreview: "Превью объяснений",
       sourceLoaded: "Источник загружен",
       progress: "Прогресс",
       complete: "завершено",
     },
     hero: {
-      eyebrow: "AI + ML система проверки отзывов",
-      title: "Выявляйте накрутку рейтингов и подозрительное поведение в отзывах в живом аналитическом workspace.",
+      eyebrow: "Контроль отзывов у партнеров",
+      title: "Выявляйте накрутку отзывов до удара по репутации бренда.",
       description:
-        "Премиальный дашборд для защиты диплома и продуктовой демонстрации. Он объединяет scraping, NLP, поиск аномалий, поведенческие сигналы и explainability для модерации в одном интерфейсе.",
-      primaryCta: "Проверить страницу",
+        "Веб-сервис для компаний, которые продают товары через подрядчиков, дилеров, маркетплейсы и партнерские витрины. Система помогает понять, можно ли доверять внешним отзывам перед расширением сотрудничества.",
+      audienceLine: "Для производителей, маркетплейсов, ритейла и команд защиты бренда.",
+      primaryCta: "Запустить проверку",
       secondaryCta: "Открыть демо",
       badges: {
-        nlp: "NLP-анализ",
-        anomaly: "Поиск аномалий",
-        patterns: "Подозрительные паттерны",
-        scraping: "Scraping + ML",
+        nlp: "Анализ текста отзывов",
+        anomaly: "Рейтинговые аномалии",
+        patterns: "Риски партнеров",
+        scraping: "Автоимпорт данных",
       },
+      flowSteps: ["Данные", "Анализ", "Риск-отчет"],
       previewEyebrow: "Предпросмотр аналитики",
-      previewTitle: "Живой снимок риска",
-      riskScore: "Риск-скор",
+      previewTitle: "Что произойдет после запуска",
+      onboardingTitle: "Без метрик до проверки",
+      onboardingDescription:
+        "Первый экран объясняет сценарий работы. Реальные оценки риска, графики и подозрительные отзывы появятся только после загрузки данных или открытия демо-отчета.",
+      onboardingSteps: [
+        "Загрузите файл, вставьте HTML, укажите URL страницы или подключите API-источник.",
+        "Система нормализует отзывы и ищет признаки накрутки рейтинга.",
+        "Вы получите отчет о рисках с причинами и элементами для ручной проверки.",
+      ],
+      outputTitle: "После анализа в отчете появятся",
+      outputItems: [
+        "общий риск-профиль",
+        "причины срабатывания системы",
+        "примеры подозрительных отзывов",
+        "рекомендации для ручной проверки",
+      ],
+      reportPreviewTitle: "Структура будущего отчета",
+      reportPreviewDescription: "Визуальный контур блоков, которые появятся только после анализа.",
+      reportPreviewBadge: "после запуска",
+      reportPreviewRows: ["Риск-профиль", "Слой доказательств", "Очередь ручной проверки"],
+      analysisScope: ["тексты отзывов", "ритм публикаций", "сдвиги рейтинга", "паттерны авторов"],
+      decisionLabel: "Вердикт системы",
+      evidenceTitle: "Почему риск повышен",
+      recommendedAction: "Что сделать дальше",
+      recommendedActionText: "Перед доверием к партнерской странице проверить подозрительные отзывы и кластеры авторов вручную.",
+      riskScore: "Риск",
       reviewActivity: "Активность отзывов",
-      recentCadence: "Недавний паттерн публикаций",
+      reviewVolume: "Объем отзывов",
+      recentCadence: "Обнаружен всплеск публикаций",
       manipulationProbability: "Вероятность накрутки",
       confidence: "Уверенность",
       flaggedReviews: "Подозрительные отзывы",
       manualReview: "Ручная проверка",
+      insightsTitle: "Главные сигналы риска",
+      insights: [
+        "Резкий всплеск отзывов после периода тишины",
+        "Повторяющиеся рекламные формулировки у разных авторов",
+        "Крайние оценки без конкретных деталей о товаре",
+      ],
+    },
+    businessValue: {
+      eyebrow: "Бизнес-сценарий",
+      title: "Для компаний, которым важно доверять отзывам у партнеров",
+      description:
+        "Сервис помогает понять, честно ли внешний продавец, подрядчик, дилер или страница маркетплейса формирует доверие к товару, либо за высоким рейтингом скрыт репутационный риск.",
+      scenarioTitle: "Типовой сценарий",
+      scenarioText:
+        "Партнер сообщает, что на стороннем сайте у товара отличные отзывы. Перед расширением сотрудничества бренд проверяет страницу через систему и получает риск-профиль: подозрительные кластеры отзывов, всплески рейтинга, слабые доказательства и элементы, требующие ручной проверки.",
+      scenarioSteps: [
+        "Партнер показывает внешнюю страницу с высоким рейтингом.",
+        "Компания загружает файл, HTML-страницу или API-источник.",
+        "Система выдает сигналы риска и отзывы для ручной проверки.",
+      ],
+      audienceTitle: "Кому это нужно",
+      audience: [
+        {
+          title: "Крупные производители",
+          description: "Контролируют, как дилеры, дистрибьюторы и региональные партнеры представляют товар.",
+        },
+        {
+          title: "Маркетплейсы и ритейл",
+          description: "Выявляют продавцов, которые накручивают рейтинг и снижают доверие покупателей.",
+        },
+        {
+          title: "Команды защиты бренда",
+          description: "Снижают репутационные, юридические и клиентские риски до публичного конфликта.",
+        },
+      ],
+      risksTitle: "Какие сигналы ищет система",
+      risks: [
+        {
+          title: "Всплески отзывов",
+          description: "Много похожих отзывов появляется за короткий период после долгой паузы.",
+        },
+        {
+          title: "Сходство текстов",
+          description: "Разные авторы повторяют одинаковые фразы, преимущества товара или эмоциональный шаблон.",
+        },
+        {
+          title: "Перекос рейтинга",
+          description: "Кривая оценок выглядит слишком положительной или резко меняется без естественной причины.",
+        },
+        {
+          title: "Слабые доказательства",
+          description: "Отзывы хвалят товар, но не содержат деталей использования, фото или достоверного контекста.",
+        },
+      ],
     },
     controlPanel: {
-      eyebrow: "Основной workspace анализа",
-      title: "Панель управления",
-      description: "Компактные настройки источника, backend-сбора и глубины анализа.",
+      eyebrow: "Запуск проверки отзывов",
+      title: "Проверка партнерской страницы",
+      description: "Выберите источник, глубину сбора и запустите модель, чтобы получить понятный бизнесу отчет о рисках.",
       sourceSectionTitle: "Источник данных",
-      sourceSectionHelper: "Выберите, как детектор должен получить следующий образец для анализа.",
+      sourceSectionHelper: "Выберите, как система должна получить набор отзывов для проверки.",
       sourceModes: {
         url: {
-          helper: "Забирает живую страницу маркетплейса через ScrapingBee.",
+          helper: "Получает живую страницу маркетплейса через подключенный сборщик данных.",
         },
         html: {
-          helper: "Вставьте или загрузите локальный snapshot для детерминированной проверки.",
+          helper: "Вставьте или загрузите локальный снимок страницы для повторяемой проверки.",
         },
         records: {
-          label: "Данные сайта",
+          label: "Структурированные данные",
           helper: "Запускает полный анализ накрутки рейтингов на структурированных данных.",
         },
       },
@@ -454,9 +664,9 @@ const translations = {
         productPageUrl: "URL страницы товара",
         productPageUrlHelper: "Лучше всего работает, когда блоки отзывов доступны на полученной странице.",
         sourceLabel: "Метка источника",
-        sourceLabelHelper: "Необязательная метка или канонический URL для snapshot.",
+        sourceLabelHelper: "Необязательная метка или исходный URL для сохраненного снимка.",
         htmlSource: "HTML-источник",
-        htmlSourceHelper: "Вставьте сырой HTML из сохраненного snapshot страницы.",
+        htmlSourceHelper: "Вставьте сырой HTML из сохраненного снимка страницы.",
         analysisModeTitle: "Режим анализа",
         analysisModeHelper: "Выберите глубину проверки для следующего запуска.",
         advancedTitle: "Расширенные настройки",
@@ -489,33 +699,36 @@ const translations = {
         snapshotHelper: "необязательная метка источника",
       },
       actions: {
-        analyze: "Проверить страницу",
+        analyze: "Запустить проверку",
         analyzing: "Идет анализ...",
-        demo: "Открыть демо",
+        demo: "Показать демо",
       },
+      submitTitle: "Все готово к анализу",
+      submitDescription: "Запустите реальную проверку или откройте демо-отчет, чтобы безопасно показать полный сценарий.",
     },
     resultsPanel: {
-      eyebrow: "Панель живого анализа",
-      title: "Риск-дашборд на основе модели",
+      eyebrow: "Результаты проверки отзывов",
+      title: "Отчет о рисках проверенной страницы",
       description:
-        "Основной workspace результатов показывает общий риск-профиль, живую аналитику по отзывам, распределения аномалий и подозрительные evidence в одном monitoring-view.",
+        "Отчет объединяет общий риск-профиль, динамику отзывов, категории аномалий и подозрительные примеры в одном представлении для принятия решения.",
       trustworthySplit: "Надежные / подозрительные",
       trendCharts: "Графики трендов и аномалий",
+      waitingBadge: "Ожидает запуска",
       unexpectedFailure: "Непредвиденный сбой анализа.",
     },
     resultsSuccess: {
       riskProfile: "Риск-профиль",
-      riskScore: "Риск-скор",
+      riskScore: "Риск",
       manipulationProbability: "Вероятность накрутки",
       confidence: "Уверенность",
       collectedReviews: "Собрано отзывов",
       flaggedReviews: "Выявлено отзывов",
       manualReview: "Ручная проверка",
-      explainabilityEyebrow: "Сводка explainability",
+      explainabilityEyebrow: "Сводка объяснений",
       explainabilityTitle: "Почему был назначен этот риск-профиль",
       explainabilityDescription:
-        "Короткий decision digest, который показывает самые сильные сигналы уровня продукта до погружения в детальную explainability-секцию ниже.",
-      decisionDigest: "Decision digest",
+        "Короткая сводка показывает самые сильные сигналы уровня продукта до погружения в детальный раздел объяснений ниже.",
+      decisionDigest: "Сводка решения",
       trustSplitEyebrow: "Распределение доверия",
       trustSplitTitle: "Надежные / подозрительные / неопределенные",
       temporalEyebrow: "Временная активность",
@@ -528,22 +741,38 @@ const translations = {
       countSeries: "Количество",
     },
     pipeline: {
-      eyebrow: "Пайплайн",
-      title: "Пайплайн review intelligence",
+      eyebrow: "Этапы",
+      title: "Этапы анализа отзывов",
       description:
-        "Прозрачный вид на операционные этапы, стоящие за финальным риск-профилем: от сбора данных до итоговой moderation-grade интерпретации.",
-      active: "Пайплайн активен",
-      complete: "Пайплайн завершен",
+        "Прозрачный вид на то, как система превращает страницу или набор данных в итоговый риск-профиль для бизнес-проверки.",
+      active: "Анализ выполняется",
+      complete: "Анализ завершен",
       waiting: "Ожидание",
     },
     emptyState: {
-      title: "Все готово для профилирования экосистемы отзывов",
+      eyebrow: "Отчет еще не сформирован",
+      title: "Выберите источник и запустите проверку",
       description:
-        "Запусти анализ, чтобы заполнить дашборд живым риск-профилем, временными графиками, карточками детекторов, explainability-факторами и ранжированной таблицей подозрительных отзывов.",
+        "После анализа здесь появится риск-отчет с доказательствами, динамикой аномалий и подозрительными отзывами для ручной проверки.",
+      setupAction: "Выбрать источник",
+      demoAction: "Открыть демо",
       cards: [
-        "Риск-скор и уверенность",
-        "Временные графики и аномалии",
-        "Панели детекторов и explainability",
+        {
+          title: "Риск-профиль",
+          description: "Общий уровень риска и уверенность модели после проверки.",
+        },
+        {
+          title: "Доказательства",
+          description: "Всплески, повторы текста, сдвиги рейтинга и слабые детали отзывов.",
+        },
+        {
+          title: "Подозрительные отзывы",
+          description: "Ранжированные примеры, которые стоит проверить вручную.",
+        },
+        {
+          title: "Подсказка решения",
+          description: "Короткий следующий шаг перед доверием к странице партнера.",
+        },
       ],
     },
     errorState: {
@@ -551,19 +780,19 @@ const translations = {
       helper: "Проверь URL страницы или загруженные данные отзывов, а затем повтори запрос.",
       errors: {
         ANALYSIS_FAILED: {
-          message: "Backend не смог завершить анализ.",
-          helper: "Проверь backend-логи, устрани причину и повтори запрос.",
+          message: "Сервер не смог завершить анализ.",
+          helper: "Проверь логи сервера, устрани причину и повтори запрос.",
         },
         INPUT_SOURCE_MISSING: {
           message: "Источник для анализа не передан.",
-          helper: "Выбери URL, HTML или Site Data и заполни нужные данные.",
+          helper: "Выбери URL, HTML или структурированные данные и заполни нужные поля.",
         },
         INVALID_INPUT: {
-          message: "Backend отклонил переданные данные.",
+          message: "Сервер отклонил переданные данные.",
           helper: "Проверь введённые данные и повтори запрос.",
         },
         INVALID_RESPONSE: {
-          message: "Backend вернул некорректный ответ.",
+          message: "Сервер вернул некорректный ответ.",
           helper: "Обнови страницу и повтори запрос. Если ошибка повторится, проверь API-логи.",
         },
         INVALID_URL: {
@@ -571,16 +800,20 @@ const translations = {
           helper: "Используй полный URL, который начинается с http:// или https://.",
         },
         INVALID_SCRAPING_WAIT: {
-          message: "Ручное ожидание слишком большое для scraping-timeout.",
+          message: "Ручное ожидание слишком большое для тайм-аута сбора данных.",
           helper: "Поставь 0-30000 мс или очисти поле, чтобы режим анализа сам выбрал безопасное значение.",
         },
+        IMPORT_SOURCE_FETCH_FAILED: {
+          message: "Backend не смог получить API-источник или файл данных.",
+          helper: "Проверь, что URL публичный и доступный, затем повтори импорт или загрузи файл вручную.",
+        },
         NETWORK_ERROR: {
-          message: "Frontend не смог подключиться к backend анализа.",
+          message: "Интерфейс не смог подключиться к серверу анализа.",
           helper: "Убедись, что Flask запущен на порту 5000, затем повтори запрос.",
         },
         RATING_ARTIFACTS_MISSING: {
-          message: "Артефакты rating anti-fraud модели отсутствуют.",
-          helper: "Запусти обучение rating-модели перед режимом Site Data.",
+          message: "Артефакты модели проверки рейтингов отсутствуют.",
+          helper: "Запусти обучение модели рейтингов перед режимом структурированных данных.",
         },
         REQUEST_BODY_INVALID: {
           message: "Тело API-запроса некорректно.",
@@ -590,22 +823,39 @@ const translations = {
           message: "Артефакты review-модели отсутствуют.",
           helper: "Запусти обучение review-модели перед анализом страниц.",
         },
+        SCRAPING_BLOCKED: {
+          message: "Маркетплейс вернул защитную или заблокированную страницу вместо отзывов.",
+          helper: "Используй HTML-снимок для стабильной проверки или повтори запуск с меньшей глубиной анализа.",
+        },
         SCRAPINGBEE_NOT_CONFIGURED: {
           message:
-            "ScrapingBee не настроен на backend. Укажи `SCRAPINGBEE_API_KEY` в `.env` или переменных окружения процесса.",
-          helper: "После изменения backend-переменных перезапусти Flask, затем повтори запрос.",
+            "Сервис сбора данных не настроен на сервере. Укажи `SCRAPINGBEE_API_KEY` в `.env` или переменных окружения процесса.",
+          helper: "После изменения переменных окружения перезапусти Flask, затем повтори запрос.",
+        },
+        SCRAPEDO_NOT_CONFIGURED: {
+          message:
+            "Scrape.do не настроен на сервере. Укажи `SCRAPEDO_API_KEY` в `.env` или переменных окружения процесса.",
+          helper: "После изменения переменных окружения перезапусти Flask, затем повтори запрос.",
         },
         SCRAPING_FETCH_FAILED: {
-          message: "ScrapingBee не смог получить страницу маркетплейса.",
-          helper: "Попробуй HTML snapshot mode, уменьши глубину анализа или проверь credits/proxy в ScrapingBee.",
+          message: "Внешний сервис сбора не смог получить страницу маркетплейса.",
+          helper: "Попробуй HTML-режим, уменьши глубину анализа или проверь лимиты и прокси в сервисах сбора.",
+        },
+        SCRAPING_RATE_LIMITED: {
+          message: "Внешний сервис сбора уперся в лимит запросов или баланс.",
+          helper: "Проверь баланс и лимиты ScrapingBee/Scrape.do или используй HTML-снимок, чтобы продолжить без живого сбора.",
+        },
+        SCRAPING_SERVICE_NOT_CONFIGURED: {
+          message: "На backend не настроен ни один провайдер живого сбора страниц.",
+          helper: "Укажи `SCRAPINGBEE_API_KEY` или `SCRAPEDO_API_KEY`, перезапусти Flask или используй HTML/файл.",
         },
         SCRAPING_TIMEOUT: {
-          message: "ScrapingBee не вернул страницу до backend-timeout.",
-          helper: "Уменьши ручное ожидание, используй Быстро/Стандарт или вставь HTML snapshot для стабильной проверки.",
+          message: "Сервис сбора не вернул страницу до тайм-аута сервера.",
+          helper: "Уменьши ручное ожидание, используй Быстро/Стандарт или вставь HTML-снимок для стабильной проверки.",
         },
         UNKNOWN_ERROR: {
           message: "Произошла непредвиденная ошибка анализа.",
-          helper: "Повтори запрос. Если ошибка повторится, проверь backend-логи.",
+          helper: "Повтори запрос. Если ошибка повторится, проверь логи сервера.",
         },
       },
     },
@@ -616,31 +866,31 @@ const translations = {
     },
     detectorGrid: {
       eyebrow: "Карточки детекторов",
-      title: "Поверхность fraud-детекторов",
+      title: "Сигналы детекторов",
       description:
-        "Каждая карточка переводит сырое поведение модели и эвристик в удобный для модерации сигнал уровня продукта.",
-      detectorScore: "Скор детектора",
+        "Каждая карточка переводит вывод модели и эвристик в понятный сигнал риска по товару или продавцу.",
+      detectorScore: "Оценка детектора",
       status: "Статус",
     },
     explainability: {
-      eyebrow: "Explainability",
+      eyebrow: "Объяснение решения",
       title: "Почему система приняла такое решение",
       description:
         "Компактный слой объяснений для защиты, модерации и интерпретации модели. Он показывает самые сильные факторы, повлиявшие на финальный риск-профиль.",
       liveWeights: "Живые веса факторов",
-      decisionNarrative: "Нарратив решения",
+      decisionNarrative: "Логика решения",
       decisionNarrativeDescription:
-        "Система комбинирует текстовую схожесть, временные аномалии, смещение рейтингов, поведение авторов и bilingual slang cues, чтобы собрать ориентированное на модерацию объяснение.",
+        "Система комбинирует текстовую схожесть, временные аномалии, смещение рейтингов, поведение авторов и языковые признаки, чтобы собрать объяснение для ручной проверки.",
       topFactors: "Топ-факторы вклада",
       topFactorsDescription:
-        "Взвешенные contribution-бары показывают, какие сигналы сильнее всего доминировали в финальном решении.",
+        "Взвешенные полосы вклада показывают, какие сигналы сильнее всего повлияли на финальное решение.",
     },
     suspiciousTable: {
       eyebrow: "Таблица подозрительных отзывов",
-      title: "Ранжированные evidence по подозрительным отзывам",
+      title: "Ранжированные примеры подозрительных отзывов",
       description:
-        "Компактная таблица для модерации с сортировкой, фильтрами и языковыми evidence по самым подозрительным отзывам.",
-      filterPlaceholder: "Фильтр по тексту, причине, автору или slang-терминам",
+        "Компактная таблица для ручной проверки с сортировкой, фильтрами и языковыми признаками по самым подозрительным отзывам.",
+      filterPlaceholder: "Фильтр по тексту, причине, автору или языковым признакам",
       severity: {
         all: "Все уровни",
         high: "Высокий",
@@ -660,17 +910,23 @@ const translations = {
         rating: "Сортировать по рейтингу",
       },
       triage: {
-        all: "Все triage-статусы",
+        all: "Все статусы проверки",
         confidentSuspicious: "Уверенно подозрительный",
         needsManualReview: "Нужна ручная проверка",
         confidentClean: "Уверенно чистый",
       },
       waitingTitle: "Таблица подозрительных отзывов ждет данные",
       waitingDescription:
-        "Запусти детектор, чтобы открыть ранжированную таблицу с языковыми evidence, фильтрами, сортировкой и уровнями доверия к авторам.",
+        "Запусти детектор, чтобы открыть ранжированную таблицу с языковыми признаками, фильтрами, сортировкой и уровнями доверия к авторам.",
       emptyTitle: "По текущим фильтрам ничего не найдено",
       emptyDescription:
-        "Попробуй другой поисковый запрос или ослабь фильтры по severity и language profile, чтобы увидеть больше отзывов.",
+        "Попробуй другой поисковый запрос или ослабь фильтры по уровню риска и языковому профилю, чтобы увидеть больше отзывов.",
+      summary: {
+        visible: "Показано строк",
+        highRisk: "Высокий риск",
+        manualReview: "Нужна проверка",
+        avgRisk: "Средний риск",
+      },
       columns: {
         reviewText: "Текст отзыва",
         rating: "Рейтинг",
@@ -697,9 +953,10 @@ const translations = {
         stockMarketingScore: "Скор сток-фото",
         photoOcrText: "OCR-текст на фото",
         photoOcrScore: "Фото OCR",
-        syntheticImageHint: "AI/synthetic hint",
-        syntheticImageScore: "AI-image подсказка",
-        slangRisk: "Slang-риск",
+        syntheticImageHint: "Признак синтетического изображения",
+        syntheticImageScore: "Оценка синтетического изображения",
+        aiTextScore: "ИИ-текст",
+        slangRisk: "Языковой риск",
         grounding: "Приземленность",
         uncertainty: "Неопределенность",
         oodDrift: "OOD-дрейф",
@@ -708,17 +965,21 @@ const translations = {
     dataImport: {
       title: "Структурированные данные сайта",
       description:
-        "Единый workspace импорта для структурированных payload, файлов и API-ответов перед запуском детектора накрутки рейтингов.",
+        "Загрузите файл или подключите API-источник. Импортер автоматически определяет формат файла и сопоставляет колонки с полями отзывов.",
+      sources: {
+        file: "Файл",
+        api: "API",
+      },
       expectedStructure: "Ожидаемая структура",
-      fetchTitle: "Загрузить из API",
+      fetchTitle: "Загрузить по API",
       fetchDescription:
-        "Укажи публичный endpoint и выполни GET-запрос. Импортер попытается нормализовать JSON, CSV, Excel или HTML-ответы в site-data records.",
+        "Укажи публичный endpoint и выполни GET-запрос. Импортер определит JSON, JSONL, CSV/TSV, Excel или HTML-ответ и нормализует его в записи отзывов.",
       fetchAction: "Загрузить данные",
       chooseFile: "Выбрать файл",
       apiPlaceholder: "https://api.example.com/reviews",
       readyTitle: "Импорт готов",
       readyDescription:
-        "Структура валидна и может быть сразу отправлена в пайплайн анализа site-data.",
+        "Структура валидна и может быть сразу отправлена в анализ структурированных данных.",
       warningTitle: "Импорт завершен с предупреждениями",
       errorTitle: "Проверка структуры не пройдена",
       errorDescription:
@@ -735,16 +996,13 @@ const translations = {
         geo: "geo",
       },
       fileDrop: {
-        json: "Перетащи JSON-файл сюда или кликни для загрузки",
-        csv: "Перетащи CSV-файл сюда или кликни для загрузки",
-        excel: "Перетащи Excel-файл сюда или кликни для загрузки",
-        html: "Перетащи HTML-файл сюда или кликни для загрузки",
+        file: "Перетащи файл сюда или кликни для загрузки",
         helper:
-          "файлы поддерживаются здесь. После загрузки импортер покажет превью и провалидирует структуру до старта анализа.",
+          "Поддерживаются Excel, CSV/TSV, JSON/JSONL и HTML. Импортер сам определит формат, покажет превью и проверит данные перед анализом.",
       },
       importLoadingTitle: "Нормализуем импортированные данные...",
       importLoadingDescription:
-        "Импортер проверяет формат, извлекает записи и собирает нормализованный payload для антифрод-пайплайна.",
+        "Импортер проверяет формат, извлекает записи и собирает нормализованный набор для анализа накрутки.",
       importFailedTitle: "Импорт данных не удался",
       runAnalysis: "Запустить анализ",
     },

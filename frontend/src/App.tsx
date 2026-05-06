@@ -1,12 +1,13 @@
 import { Suspense, lazy, useDeferredValue, useRef, useState } from "react";
+import { BusinessValueSection } from "./components/BusinessValueSection";
 import { ControlPanel } from "./components/ControlPanel";
 import { HeroSection } from "./components/HeroSection";
+import { HistoryPanel } from "./components/HistoryPanel";
 import { PipelineStepper } from "./components/PipelineStepper";
 import { ResultsPanel } from "./components/ResultsPanel";
 import { useAnalysis } from "./hooks/useAnalysis";
-import { useLocale } from "./i18n";
 import { buildAnalysisPayload } from "./lib/analysisPayload";
-import { defaultFormValues, getDemoResult } from "./lib/mockData";
+import { defaultFormValues } from "./lib/mockData";
 import type { AnalysisFormValues } from "./types/analysis";
 
 const LazyDetectorGrid = lazy(async () => ({
@@ -22,7 +23,6 @@ const LazySuspiciousReviewsTable = lazy(async () => ({
 }));
 
 export function App() {
-  const { locale } = useLocale();
   const [formValues, setFormValues] = useState<AnalysisFormValues>(defaultFormValues);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const { status, result, error, errorCode, progress, pipelineStages, runAnalysis, retry } = useAnalysis();
@@ -50,20 +50,39 @@ export function App() {
     await runAnalysis(buildAnalysisPayload(formValues), formValues.sourceMode, true);
   };
 
-  const preview = result || getDemoResult("url", locale);
+  const handleUseHtmlSnapshot = () => {
+    setFormValues((current) => ({
+      ...current,
+      html: current.html,
+      sourceMode: "html",
+      sourceUrl: current.sourceUrl || current.url || "manual-html-snapshot",
+    }));
+    scrollToWorkspace();
+  };
+
+  const handleFastRetry = async () => {
+    const fastValues: AnalysisFormValues = {
+      ...formValues,
+      analysisDepth: "fast",
+      waitMs: "",
+    };
+    setFormValues(fastValues);
+    scrollToWorkspace();
+    await runAnalysis(buildAnalysisPayload(fastValues), fastValues.sourceMode);
+  };
 
   return (
     <div className="dashboard-shell">
       <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute left-[-10%] top-0 h-[360px] w-[360px] rounded-full bg-accent/10 blur-3xl" />
-        <div className="absolute right-[-5%] top-[10%] h-[300px] w-[300px] rounded-full bg-slate-300/35 blur-3xl" />
-        <div className="absolute bottom-[-8%] left-[18%] h-[280px] w-[280px] rounded-full bg-emerald-100 blur-3xl" />
+        <div className="absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(ellipse_at_top,rgba(15,118,110,0.12),transparent_62%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.56),transparent_46%)]" />
       </div>
 
-      <HeroSection preview={preview} onPrimaryAction={scrollToWorkspace} onSecondaryAction={handleDemo} />
+      <HeroSection onPrimaryAction={scrollToWorkspace} onSecondaryAction={handleDemo} />
+      <BusinessValueSection />
 
-      <main className="section-wrap pb-4" ref={workspaceRef}>
-        <section className="space-y-5">
+      <main className="section-wrap pb-6" ref={workspaceRef}>
+        <section className="space-y-6">
           <ControlPanel values={formValues} status={status} onChange={updateField} onSubmit={handleAnalyze} onLoadDemo={handleDemo} />
           <ResultsPanel
             status={status}
@@ -73,6 +92,10 @@ export function App() {
             progress={progress}
             pipelineStages={pipelineStages}
             onRetry={retry}
+            onSetup={scrollToWorkspace}
+            onLoadDemo={handleDemo}
+            onUseFastRetry={handleFastRetry}
+            onUseHtmlSnapshot={handleUseHtmlSnapshot}
           />
         </section>
       </main>
@@ -86,6 +109,8 @@ export function App() {
           <LazySuspiciousReviewsTable reviews={deferredResult?.suspiciousReviews || []} status={status} />
         </Suspense>
       )}
+
+      <HistoryPanel status={status} />
     </div>
   );
 }

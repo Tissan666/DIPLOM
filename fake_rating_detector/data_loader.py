@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-REQUIRED_COLUMNS = ["user_id", "item_id", "rating", "timestamp", "ip_address"]
+REQUIRED_COLUMNS = ["user_id", "item_id", "rating", "timestamp"]
 CANONICAL_ALIASES = {
     "user_id": ["user", "userId"],
     "item_id": ["service_id", "item_service_id", "itemId"],
@@ -17,6 +17,7 @@ CANONICAL_ALIASES = {
     "is_fake": ["label", "target", "is_anomaly"],
     "geolocation": ["geo_location"],
 }
+MISSING_IP_MARKERS = {"", "-", "unknown", "none", "null", "nan", "n/a", "na"}
 
 
 def _rename_aliases(df: pd.DataFrame) -> pd.DataFrame:
@@ -61,10 +62,15 @@ def prepare_ratings_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         prepared["review_text"] = ""
     if "is_fake" not in prepared.columns:
         prepared["is_fake"] = -1
+    if "ip_address" not in prepared.columns:
+        prepared["ip_address"] = ""
 
     prepared["user_id"] = prepared["user_id"].astype(str)
     prepared["item_id"] = prepared["item_id"].astype(str)
-    prepared["ip_address"] = prepared["ip_address"].fillna("0.0.0.0").astype(str)
+    prepared["ip_address"] = [
+        _normalize_optional_ip(value, index)
+        for index, value in enumerate(prepared["ip_address"].tolist())
+    ]
     prepared["review_text"] = prepared["review_text"].fillna("").astype(str)
     prepared["rating"] = pd.to_numeric(prepared["rating"], errors="coerce")
     prepared["timestamp"] = pd.to_datetime(prepared["timestamp"], errors="coerce", utc=True).dt.tz_localize(None)
@@ -73,6 +79,14 @@ def prepare_ratings_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     prepared = prepared.dropna(subset=["rating", "timestamp"]).reset_index(drop=True)
     return prepared.sort_values("timestamp").reset_index(drop=True)
+
+
+def _normalize_optional_ip(value: object, row_index: int) -> str:
+    """Keep real IP values, but never group missing IPs into one fake shared address."""
+    raw_value = "" if pd.isna(value) else str(value).strip()
+    if raw_value.lower() in MISSING_IP_MARKERS:
+        return f"__missing_ip_{row_index}"
+    return raw_value
 
 
 def load_ratings_data(csv_path: str | Path) -> pd.DataFrame:

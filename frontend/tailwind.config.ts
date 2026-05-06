@@ -22,7 +22,9 @@ const config: Config = {
       },
       boxShadow: {
         premium: "var(--shadow-premium)",
-        float: "var(--shadow-float)"
+        float: "var(--shadow-float)",
+        soft: "var(--shadow-soft)",
+        lift: "var(--shadow-lift)"
       },
       backgroundImage: {
         halo: "var(--background-halo)"
