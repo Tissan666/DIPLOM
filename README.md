@@ -103,6 +103,8 @@ This mode can ingest:
 - Yelp Open Dataset from a local download
 - YelpNYC labeled data from a local file
 
+The AI-text detector reserves part of the real clean marketplace reviews as a holdout set and calibrates its runtime threshold against the clean-review false-positive rate. Treat this score as a moderation signal, not hard proof that a review was generated.
+
 If you want only the synthetic fallback dataset:
 
 ```powershell

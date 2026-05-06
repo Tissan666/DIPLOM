@@ -227,6 +227,7 @@ def build_ai_text_signals(
     model_bundle = _load_ai_text_artifact(artifacts_dir)
     model_status = "ready_trained" if model_bundle else "ready_builtin"
     model_name = str(model_bundle.get("version", AI_TEXT_MODEL_VERSION) if model_bundle else f"{AI_TEXT_MODEL_VERSION}_builtin")
+    flag_threshold = _flag_threshold_for_bundle(model_bundle)
     prefix_counts = _prefix_counts(text_values)
 
     for row_index, text in enumerate(text_values):
@@ -235,8 +236,12 @@ def build_ai_text_signals(
         prefix_count = prefix_counts.get(prefix, 0) if prefix else 0
         if prefix_count >= 2 and signal["ai_text_score"] >= 0.40 and signal["ai_text_word_count"] >= AI_TEXT_MIN_WORDS:
             signal["ai_text_score"] = float(np.clip(signal["ai_text_score"] + min(0.12, 0.04 * (prefix_count - 1)), 0.0, 1.0))
-            signal["ai_text_label"] = _label_for_score(signal["ai_text_score"], signal["ai_text_word_count"])
-            signal["ai_text_flag"] = int(signal["ai_text_score"] >= AI_TEXT_FLAG_THRESHOLD)
+            signal["ai_text_label"] = _label_for_score(
+                signal["ai_text_score"],
+                signal["ai_text_word_count"],
+                flag_threshold=flag_threshold,
+            )
+            signal["ai_text_flag"] = int(signal["ai_text_score"] >= flag_threshold)
             signal["ai_text_reasons"].append("The wording contains repeated AI-style review openings across the current page.")
 
         frame.at[row_index, "ai_text_score"] = signal["ai_text_score"]
@@ -270,15 +275,21 @@ def train_ai_text_detector(
     output_dir = ensure_directory(output_dir)
     texts, labels = _generate_training_examples(n_samples=n_samples, random_state=random_state)
     real_negative_count = 0
+    real_negative_holdout_texts: list[str] = []
     if real_negative_texts:
         real_negative_candidates = [
             normalize_whitespace(text)
             for text in real_negative_texts
             if isinstance(text, str) and len(normalize_whitespace(text).split()) >= AI_TEXT_MIN_WORDS
         ]
+        real_negative_candidates = list(dict.fromkeys(real_negative_candidates))
         rng = random.Random(random_state + 7919)
         rng.shuffle(real_negative_candidates)
         real_negative_candidates = real_negative_candidates[: max(0, int(max_real_negative_texts))]
+        if len(real_negative_candidates) >= 500:
+            holdout_target = min(2000, max(250, int(len(real_negative_candidates) * 0.20)))
+            real_negative_holdout_texts = real_negative_candidates[:holdout_target]
+            real_negative_candidates = real_negative_candidates[holdout_target:]
         texts.extend(real_negative_candidates)
         labels.extend([0] * len(real_negative_candidates))
         real_negative_count = len(real_negative_candidates)
@@ -315,29 +326,51 @@ def train_ai_text_detector(
         random_state=random_state,
     )
     classifier.fit(train_matrix, train_labels)
+    model_bundle_for_scoring = {
+        "vectorizer": vectorizer,
+        "numeric_scaler": scaler,
+        "classifier": classifier,
+        "threshold": AI_TEXT_FLAG_THRESHOLD,
+        "hint_threshold": AI_TEXT_HINT_THRESHOLD,
+    }
     probabilities = classifier.predict_proba(test_matrix)[:, 1]
-    predictions = (probabilities >= AI_TEXT_FLAG_THRESHOLD).astype(int)
+    test_scores = _runtime_ai_text_scores(test_texts, model_bundle_for_scoring)
+    real_negative_holdout_scores = _runtime_ai_text_scores(real_negative_holdout_texts, model_bundle_for_scoring)
+    calibrated_threshold = _select_ai_text_threshold(
+        test_labels=test_labels,
+        test_scores=test_scores,
+        real_negative_holdout_scores=real_negative_holdout_scores,
+    )
+    predictions = (test_scores >= calibrated_threshold).astype(int)
     metrics = {
         "accuracy": float(accuracy_score(test_labels, predictions)),
         "precision": float(precision_score(test_labels, predictions, zero_division=0)),
         "recall": float(recall_score(test_labels, predictions, zero_division=0)),
         "f1": float(f1_score(test_labels, predictions, zero_division=0)),
-        "roc_auc": float(roc_auc_score(test_labels, probabilities)),
-        "average_precision": float(average_precision_score(test_labels, probabilities)),
+        "roc_auc": float(roc_auc_score(test_labels, test_scores)),
+        "average_precision": float(average_precision_score(test_labels, test_scores)),
+        "classifier_roc_auc": float(roc_auc_score(test_labels, probabilities)),
+        "classifier_average_precision": float(average_precision_score(test_labels, probabilities)),
     }
+    real_negative_holdout_metrics = _clean_holdout_metrics(
+        scores=real_negative_holdout_scores,
+        threshold=calibrated_threshold,
+    )
 
     bundle = {
         "version": AI_TEXT_MODEL_VERSION,
         "vectorizer": vectorizer,
         "numeric_scaler": scaler,
         "classifier": classifier,
-        "threshold": AI_TEXT_FLAG_THRESHOLD,
+        "threshold": calibrated_threshold,
         "hint_threshold": AI_TEXT_HINT_THRESHOLD,
         "numeric_feature_names": NUMERIC_FEATURE_NAMES,
         "trained_rows": int(len(texts)),
         "real_negative_rows": int(real_negative_count),
+        "real_negative_holdout_rows": int(len(real_negative_holdout_texts)),
         "random_state": int(random_state),
         "metrics": metrics,
+        "real_negative_holdout_metrics": real_negative_holdout_metrics,
     }
     artifact_path = Path(artifacts_dir) / AI_TEXT_MODEL_FILENAME
     joblib.dump(bundle, artifact_path)
@@ -348,9 +381,12 @@ def train_ai_text_detector(
         "version": AI_TEXT_MODEL_VERSION,
         "training_rows": int(len(texts)),
         "real_negative_rows": int(real_negative_count),
+        "real_negative_holdout_rows": int(len(real_negative_holdout_texts)),
         "test_rows": int(len(test_texts)),
         "metrics": metrics,
-        "threshold": AI_TEXT_FLAG_THRESHOLD,
+        "real_negative_holdout_metrics": real_negative_holdout_metrics,
+        "threshold": calibrated_threshold,
+        "default_threshold": AI_TEXT_FLAG_THRESHOLD,
     }
     save_json(summary, Path(output_dir) / "ai_text_detector_metrics.json")
     return summary
@@ -376,6 +412,9 @@ def ai_text_capability_status(artifacts_dir: str | Path = "models") -> dict:
             "model": str(bundle.get("version", AI_TEXT_MODEL_VERSION) if bundle else AI_TEXT_MODEL_VERSION),
             "artifact_path": str(artifact_path),
             "trained_rows": int(bundle.get("trained_rows", 0) if bundle else 0),
+            "real_negative_rows": int(bundle.get("real_negative_rows", 0) if bundle else 0),
+            "real_negative_holdout_rows": int(bundle.get("real_negative_holdout_rows", 0) if bundle else 0),
+            "threshold": float(bundle.get("threshold", AI_TEXT_FLAG_THRESHOLD) if bundle else AI_TEXT_FLAG_THRESHOLD),
         }
 
     return {
@@ -387,6 +426,77 @@ def ai_text_capability_status(artifacts_dir: str | Path = "models") -> dict:
     }
 
 
+def _select_ai_text_threshold(
+    test_labels: np.ndarray,
+    test_scores: np.ndarray,
+    real_negative_holdout_scores: np.ndarray,
+    max_clean_holdout_fpr: float = 0.02,
+) -> float:
+    """Pick a runtime threshold that preserves recall while limiting clean marketplace false positives."""
+    if test_scores.size == 0:
+        return AI_TEXT_FLAG_THRESHOLD
+
+    best_threshold = AI_TEXT_FLAG_THRESHOLD
+    best_score = -1.0
+    for threshold in np.linspace(0.52, 0.90, 39):
+        predictions = (test_scores >= threshold).astype(int)
+        f1 = _safe_f1(test_labels, predictions)
+        recall = _safe_recall(test_labels, predictions)
+        clean_fpr = _clean_false_positive_rate(real_negative_holdout_scores, threshold)
+        if real_negative_holdout_scores.size and clean_fpr > max_clean_holdout_fpr:
+            continue
+        score = f1 + 0.08 * recall - 0.20 * threshold
+        if score > best_score:
+            best_score = score
+            best_threshold = float(threshold)
+
+    return float(best_threshold)
+
+
+def _clean_holdout_metrics(scores: np.ndarray, threshold: float) -> dict:
+    if scores.size == 0:
+        return {
+            "rows": 0,
+            "flagged": 0,
+            "false_positive_rate": None,
+            "mean_score": None,
+            "p95_score": None,
+            "p99_score": None,
+            "max_score": None,
+        }
+    flagged = int((scores >= threshold).sum())
+    return {
+        "rows": int(scores.size),
+        "flagged": flagged,
+        "false_positive_rate": float(flagged / scores.size),
+        "mean_score": float(np.mean(scores)),
+        "p95_score": float(np.quantile(scores, 0.95)),
+        "p99_score": float(np.quantile(scores, 0.99)),
+        "max_score": float(np.max(scores)),
+    }
+
+
+def _clean_false_positive_rate(scores: np.ndarray, threshold: float) -> float:
+    if scores.size == 0:
+        return 0.0
+    return float((scores >= threshold).sum() / scores.size)
+
+
+def _safe_f1(labels: np.ndarray, predictions: np.ndarray) -> float:
+    true_positive = int(((labels == 1) & (predictions == 1)).sum())
+    false_positive = int(((labels == 0) & (predictions == 1)).sum())
+    false_negative = int(((labels == 1) & (predictions == 0)).sum())
+    denominator = 2 * true_positive + false_positive + false_negative
+    return float((2 * true_positive) / denominator) if denominator else 0.0
+
+
+def _safe_recall(labels: np.ndarray, predictions: np.ndarray) -> float:
+    true_positive = int(((labels == 1) & (predictions == 1)).sum())
+    false_negative = int(((labels == 1) & (predictions == 0)).sum())
+    denominator = true_positive + false_negative
+    return float(true_positive / denominator) if denominator else 0.0
+
+
 def _score_ai_text(text: str, model_bundle: dict | None = None) -> dict:
     normalized_text = normalize_whitespace(text)
     features = _numeric_features(normalized_text)
@@ -395,6 +505,8 @@ def _score_ai_text(text: str, model_bundle: dict | None = None) -> dict:
     model_probability = _model_probability(normalized_text, model_bundle) if model_bundle else None
     score = heuristic_score if model_probability is None else 0.70 * model_probability + 0.30 * heuristic_score
     structured_marketplace_review = features["marketplace_structure_score"] >= 0.42
+    flag_threshold = _flag_threshold_for_bundle(model_bundle)
+    hint_threshold = _hint_threshold_for_bundle(model_bundle)
 
     compact_cliche = features["formulaic_review_cliche_score"] >= 0.65 and word_count >= 8
     if word_count < AI_TEXT_MIN_WORDS:
@@ -412,8 +524,13 @@ def _score_ai_text(text: str, model_bundle: dict | None = None) -> dict:
 
     score = float(np.clip(score, 0.0, 1.0))
     label_word_count = AI_TEXT_MIN_WORDS if compact_cliche else word_count
-    label = _label_for_score(score, label_word_count)
-    reasons = _reasons_for_features(features, score)
+    label = _label_for_score(
+        score,
+        label_word_count,
+        flag_threshold=flag_threshold,
+        hint_threshold=hint_threshold,
+    )
+    reasons = _reasons_for_features(features, score, hint_threshold=hint_threshold)
     feature_hits = {
         key: float(features[key])
         for key in [
@@ -431,7 +548,7 @@ def _score_ai_text(text: str, model_bundle: dict | None = None) -> dict:
     }
     return {
         "ai_text_score": score,
-        "ai_text_flag": int(score >= AI_TEXT_FLAG_THRESHOLD and (word_count >= AI_TEXT_MIN_WORDS or compact_cliche)),
+        "ai_text_flag": int(score >= flag_threshold and (word_count >= AI_TEXT_MIN_WORDS or compact_cliche)),
         "ai_text_label": label,
         "ai_text_reasons": reasons,
         "ai_text_feature_hits": feature_hits,
@@ -471,6 +588,26 @@ def _load_ai_text_artifact_cached(artifact_key: str) -> dict:
     return joblib.load(artifact_key)
 
 
+def _flag_threshold_for_bundle(model_bundle: dict | None) -> float:
+    if not model_bundle:
+        return AI_TEXT_FLAG_THRESHOLD
+    try:
+        return float(np.clip(float(model_bundle.get("threshold", AI_TEXT_FLAG_THRESHOLD)), 0.45, 0.95))
+    except Exception:
+        return AI_TEXT_FLAG_THRESHOLD
+
+
+def _hint_threshold_for_bundle(model_bundle: dict | None) -> float:
+    if not model_bundle:
+        return AI_TEXT_HINT_THRESHOLD
+    try:
+        raw_hint = float(model_bundle.get("hint_threshold", AI_TEXT_HINT_THRESHOLD))
+        flag_threshold = _flag_threshold_for_bundle(model_bundle)
+        return float(np.clip(min(raw_hint, flag_threshold - 0.08), 0.35, flag_threshold))
+    except Exception:
+        return AI_TEXT_HINT_THRESHOLD
+
+
 def _model_probability(text: str, model_bundle: dict | None) -> float | None:
     if not model_bundle:
         return None
@@ -483,6 +620,15 @@ def _model_probability(text: str, model_bundle: dict | None) -> float | None:
         return float(model_bundle["classifier"].predict_proba(matrix)[0, 1])
     except Exception:
         return None
+
+
+def _runtime_ai_text_scores(texts: list[str], model_bundle: dict | None) -> np.ndarray:
+    if not texts:
+        return np.asarray([], dtype=float)
+    return np.asarray(
+        [_score_ai_text(text, model_bundle=model_bundle)["ai_text_score"] for text in texts],
+        dtype=float,
+    )
 
 
 def _numeric_feature_matrix(texts: list[str]) -> np.ndarray:
@@ -588,20 +734,30 @@ def _heuristic_score(features: dict[str, float]) -> float:
     return float(np.clip(score, 0.0, 1.0))
 
 
-def _label_for_score(score: float, word_count: int) -> str:
+def _label_for_score(
+    score: float,
+    word_count: int,
+    flag_threshold: float = AI_TEXT_FLAG_THRESHOLD,
+    hint_threshold: float = AI_TEXT_HINT_THRESHOLD,
+) -> str:
     if word_count < AI_TEXT_MIN_WORDS:
         return "insufficient_text"
-    if score >= AI_TEXT_STRONG_THRESHOLD:
+    strong_threshold = max(AI_TEXT_STRONG_THRESHOLD, min(0.95, flag_threshold + 0.10))
+    if score >= strong_threshold:
         return "likely_ai_text"
-    if score >= AI_TEXT_FLAG_THRESHOLD:
+    if score >= flag_threshold:
         return "ai_text_signal"
-    if score >= AI_TEXT_HINT_THRESHOLD:
+    if score >= hint_threshold:
         return "weak_ai_text_hint"
     return "human_like_or_low_signal"
 
 
-def _reasons_for_features(features: dict[str, float], score: float) -> list[str]:
-    if score < AI_TEXT_HINT_THRESHOLD:
+def _reasons_for_features(
+    features: dict[str, float],
+    score: float,
+    hint_threshold: float = AI_TEXT_HINT_THRESHOLD,
+) -> list[str]:
+    if score < hint_threshold:
         return []
     reasons = ["AI-text detector flagged polished/template-like review language; treat this as a moderation signal, not proof."]
     if features["generic_phrase_density"] >= 0.10 or features["catalog_phrase_density"] >= 0.08:
