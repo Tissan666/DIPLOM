@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+import pandas as pd
 
 from fake_rating_detector.pipeline import train_anomaly_detector
 from fake_rating_detector.sample_data import create_sample_dataset as create_ratings_sample_dataset
@@ -23,6 +26,15 @@ from review_scraper_detector.ai_text_signals import train_ai_text_detector
 from review_scraper_detector.sample_data import create_sample_review_dataset
 from review_scraper_detector.training import train_review_classifier
 from review_scraper_detector.utils import save_json
+
+
+def print_json(payload: dict) -> None:
+    """Print JSON safely on Windows consoles with non-UTF-8 code pages."""
+    text = json.dumps(payload, indent=2, ensure_ascii=False)
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write(text.encode("utf-8", errors="replace") + b"\n")
 
 
 def parse_args() -> argparse.Namespace:
@@ -148,6 +160,18 @@ def parse_args() -> argparse.Namespace:
         help="Hugging Face split for Amazon Reviews 2023.",
     )
     parser.add_argument(
+        "--amazon-reviews-2023-shuffle-buffer",
+        type=int,
+        default=256,
+        help="Streaming shuffle buffer for Amazon Reviews 2023. Keep small for bounded marketplace runs.",
+    )
+    parser.add_argument(
+        "--amazon-reviews-2023-max-scan-seconds",
+        type=float,
+        default=1800.0,
+        help="Stop scanning Amazon Reviews 2023 after this many seconds. Use 0 to disable.",
+    )
+    parser.add_argument(
         "--yelp-open-review-json",
         type=Path,
         default=DEFAULT_YELP_OPEN_REVIEW_JSON,
@@ -199,6 +223,12 @@ def parse_args() -> argparse.Namespace:
         default=2600,
         help="Rows in the local synthetic RU/EN AI-text detector training set.",
     )
+    parser.add_argument(
+        "--ai-text-real-negative-max",
+        type=int,
+        default=2000,
+        help="Maximum real clean review texts to add as AI-text detector negative examples.",
+    )
     return parser.parse_args()
 
 
@@ -227,6 +257,12 @@ def main() -> None:
             amazon_reviews_2023_repo=args.amazon_reviews_2023_repo,
             amazon_reviews_2023_config=args.amazon_reviews_2023_config,
             amazon_reviews_2023_split=args.amazon_reviews_2023_split,
+            amazon_reviews_2023_shuffle_buffer=args.amazon_reviews_2023_shuffle_buffer,
+            amazon_reviews_2023_max_scan_seconds=(
+                None
+                if args.amazon_reviews_2023_max_scan_seconds <= 0
+                else args.amazon_reviews_2023_max_scan_seconds
+            ),
             yelp_open_review_json=args.yelp_open_review_json,
             yelpnyc_path=args.yelpnyc_path,
             grammar_zip=args.grammar_zip,
@@ -261,11 +297,29 @@ def main() -> None:
 
     ai_text_summary: dict | None = None
     if not args.skip_ai_text_model:
+        real_negative_texts: list[str] | None = None
+        if "dataset_df" in locals() and dataset_df is not None:
+            real_negative_texts = (
+                dataset_df.loc[dataset_df["label"] == 0, "review_text"]
+                .dropna()
+                .astype(str)
+                .tolist()
+            )
+        elif args.dataset.exists():
+            existing_dataset = pd.read_csv(args.dataset, usecols=["review_text", "label"])
+            real_negative_texts = (
+                existing_dataset.loc[existing_dataset["label"] == 0, "review_text"]
+                .dropna()
+                .astype(str)
+                .tolist()
+            )
         ai_text_summary = train_ai_text_detector(
             artifacts_dir=args.artifacts_dir,
             output_dir=args.output_dir,
             n_samples=args.ai_text_sample_size,
             random_state=args.seed,
+            real_negative_texts=real_negative_texts,
+            max_real_negative_texts=args.ai_text_real_negative_max,
         )
 
     rating_summary: dict | None = None
@@ -300,7 +354,7 @@ def main() -> None:
     }
     save_json(summary, args.output_dir / "system_training_summary.json")
 
-    print(json.dumps(summary, indent=2, ensure_ascii=False))
+    print_json(summary)
 
 
 if __name__ == "__main__":

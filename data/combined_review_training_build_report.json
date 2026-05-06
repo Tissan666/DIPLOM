@@ -1,44 +1,44 @@
 {
   "output_path": "data\\combined_review_training.csv",
-  "records_total": 15341,
-  "split_group_count": 10838,
+  "records_total": 41822,
+  "split_group_count": 34493,
   "holdout_group_count": 96,
-  "synthetic_hard_negative_records": 1331,
+  "synthetic_hard_negative_records": 4815,
   "label_distribution": {
-    "0": 9389,
-    "1": 5952
+    "0": 32838,
+    "1": 8984
   },
   "source_distribution": {
-    "synthetic_suspicious_augmented": 4503,
-    "grammar_product_reviews": 1995,
-    "recipe_reviews_zip": 1993,
-    "turkish_user_reviews": 1989,
-    "uci_recipe_reviews_911": 1764,
-    "synthetic_suspicious_template": 1449,
-    "uci_travel_review_ratings_485": 1134,
-    "synthetic_normal_template": 514
+    "amazon_reviews_2023:raw_review_All_Beauty": 24640,
+    "synthetic_suspicious_augmented": 7329,
+    "grammar_product_reviews": 2491,
+    "recipe_reviews_zip": 2488,
+    "turkish_user_reviews": 2483,
+    "synthetic_suspicious_template": 1655,
+    "synthetic_normal_template": 736
   },
   "product_family_distribution": {
-    "food_recipe": 5574,
-    "general": 2840,
-    "travel": 1686,
-    "parf_m": 810,
-    "cep_telefonu": 809,
-    "usb": 526,
-    "gaming_headset": 285,
-    "led_desk_lamp": 282,
-    "televi_zyon": 276,
-    "power_bank": 272,
-    "phone_case": 270,
-    "vacuum_cleaner": 270,
-    "wireless_mouse": 264,
-    "coffee_machine": 264,
-    "kitchen_blender": 255,
-    "ay_maki_nesi": 208,
-    "kulaklik": 178,
-    "modem": 170,
-    "local_business": 70,
-    "bi_lgi_sayar": 32
+    "beauty": 29218,
+    "food_recipe": 3450,
+    "general": 3230,
+    "parf_m": 903,
+    "cep_telefonu": 891,
+    "usb": 581,
+    "televi_zyon": 308,
+    "coffee_machine": 302,
+    "vacuum_cleaner": 301,
+    "kitchen_blender": 300,
+    "phone_case": 300,
+    "gaming_headset": 300,
+    "power_bank": 298,
+    "wireless_mouse": 298,
+    "led_desk_lamp": 295,
+    "ay_maki_nesi": 250,
+    "kulaklik": 223,
+    "modem": 200,
+    "local_business": 75,
+    "travel": 64,
+    "bi_lgi_sayar": 35
   },
   "source_reports": [
     {
@@ -46,21 +46,21 @@
       "path": "C:\\Users\\User\\Downloads\\GrammarandProductReviews.zip",
       "status": "loaded",
       "records_raw": 71044,
-      "records_used": 2000
+      "records_used": 2500
     },
     {
       "source": "recipe_reviews_zip",
       "path": "C:\\Users\\User\\Downloads\\recipe+reviews+and+user+feedback+dataset.zip",
       "status": "loaded",
       "records_raw": 18182,
-      "records_used": 2000
+      "records_used": 2500
     },
     {
       "source": "turkish_user_reviews",
       "path": "C:\\Users\\User\\Downloads\\turkish+user+review+dataset.zip",
       "status": "loaded",
       "records_raw": 34284,
-      "records_used": 2000
+      "records_used": 2500
     },
     {
       "source": "amazon_commerce_reviews_set",
@@ -74,16 +74,33 @@
       "reason": "The archive contains a nested RAR file. No safe text-review parser is configured for it yet. The extracted ARFF snapshot appears zero-filled, so it was excluded from training."
     },
     {
-      "source": "uci_recipe_reviews_911",
+      "source": "amazon_reviews_2023",
+      "repo_id": "McAuley-Lab/Amazon-Reviews-2023",
+      "config": "raw_review_All_Beauty",
+      "split": "full",
+      "shuffle_buffer": 256,
+      "max_scan_seconds": 3600.0,
       "status": "loaded",
-      "records_raw": 18182,
-      "records_used": 2000
+      "records_raw": 25197,
+      "records_used": 25000,
+      "elapsed_seconds": 8.453
     },
     {
-      "source": "uci_travel_review_ratings_485",
-      "status": "loaded",
-      "records_raw": 5456,
-      "records_used": 2000
+      "source": "yelp_open_dataset",
+      "path": "C:\\Users\\User\\Downloads\\yelp_academic_dataset_review.json",
+      "resolved_path": null,
+      "status": "missing",
+      "records_raw": 0,
+      "records_used": 0,
+      "reason": "Yelp review JSON file was not found."
+    },
+    {
+      "source": "yelpnyc_labeled_reviews",
+      "path": "C:\\Users\\User\\Downloads\\YelpNYC.csv",
+      "status": "missing",
+      "records_raw": 0,
+      "records_used": 0,
+      "reason": "YelpNYC file was not found. The official labeled dataset is provided by request."
     }
   ]
 }

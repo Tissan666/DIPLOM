@@ -89,6 +89,14 @@ Larger public-data run:
 python train.py --include-large-public-data --max-rows-per-source 3000 --large-max-rows-per-source 20000 --synthetic-ratio 0.75 --epochs 24 --batch-size 64 --learning-rate 0.0008 --review-max-features 12000 --review-char-max-features 6000 --review-hidden-dims 768,256,64 --review-dropout 0.30 --skip-ratings-model
 ```
 
+For a bounded marketplace-robustness pass that adds real Amazon Reviews 2023 text as clean hard negatives without an overnight run:
+
+```powershell
+python train.py --include-large-public-data --skip-uci --amazon-reviews-2023-config raw_review_All_Beauty --amazon-reviews-2023-shuffle-buffer 256 --amazon-reviews-2023-max-scan-seconds 3600 --max-rows-per-source 2500 --large-max-rows-per-source 25000 --synthetic-ratio 0.60 --epochs 18 --batch-size 64 --learning-rate 0.0008 --review-max-features 10000 --review-char-max-features 4500 --review-hidden-dims 768,256,64 --review-dropout 0.35 --skip-ratings-model --ai-text-sample-size 5000 --ai-text-real-negative-max 8000
+```
+
+For a short smoke check before committing to the longer run, lower `--large-max-rows-per-source` to `400`, `--amazon-reviews-2023-max-scan-seconds` to `120`, and `--epochs` to `2`.
+
 This mode can ingest:
 
 - `McAuley-Lab/Amazon-Reviews-2023` from Hugging Face

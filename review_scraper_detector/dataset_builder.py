@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import time
 import zipfile
 from pathlib import Path
 
@@ -54,6 +55,8 @@ def build_combined_training_dataset(
     amazon_reviews_2023_repo: str = DEFAULT_AMAZON_REVIEWS_2023_REPO,
     amazon_reviews_2023_config: str = DEFAULT_AMAZON_REVIEWS_2023_CONFIG,
     amazon_reviews_2023_split: str = "full",
+    amazon_reviews_2023_shuffle_buffer: int = 256,
+    amazon_reviews_2023_max_scan_seconds: float | None = 1800.0,
     yelp_open_review_json: str | Path = DEFAULT_YELP_OPEN_REVIEW_JSON,
     yelpnyc_path: str | Path = DEFAULT_YELPNYC_PATH,
     grammar_zip: str | Path = DEFAULT_GRAMMAR_ZIP,
@@ -99,6 +102,8 @@ def build_combined_training_dataset(
                 split=amazon_reviews_2023_split,
                 max_rows=large_limit,
                 seed=seed,
+                shuffle_buffer=amazon_reviews_2023_shuffle_buffer,
+                max_scan_seconds=amazon_reviews_2023_max_scan_seconds,
             ),
             lambda: _load_yelp_open_reviews(yelp_open_review_json, large_limit, seed),
             lambda: _load_yelpnyc_labeled_reviews(yelpnyc_path, large_limit, seed),
@@ -441,13 +446,18 @@ def _load_amazon_reviews_2023(
     split: str,
     max_rows: int,
     seed: int,
+    shuffle_buffer: int = 256,
+    max_scan_seconds: float | None = 1800.0,
 ) -> tuple[pd.DataFrame, dict]:
     """Load Amazon Reviews 2023 from Hugging Face in streaming mode."""
+    started_at = time.monotonic()
     report = {
         "source": "amazon_reviews_2023",
         "repo_id": repo_id,
         "config": config_name,
         "split": split,
+        "shuffle_buffer": int(shuffle_buffer),
+        "max_scan_seconds": None if max_scan_seconds is None else float(max_scan_seconds),
         "status": "skipped",
         "records_raw": 0,
         "records_used": 0,
@@ -464,16 +474,24 @@ def _load_amazon_reviews_2023(
             streaming=True,
             trust_remote_code=True,
         )
-        if hasattr(dataset, "shuffle"):
-            dataset = dataset.shuffle(seed=seed, buffer_size=max(1000, min(20000, max_rows * 2)))
+        if shuffle_buffer > 0 and hasattr(dataset, "shuffle"):
+            buffer_size = max(1, min(int(shuffle_buffer), max(1, int(max_rows))))
+            dataset = dataset.shuffle(seed=seed, buffer_size=buffer_size)
+            report["shuffle_buffer"] = int(buffer_size)
     except Exception as exc:
         report["status"] = "failed"
         report["reason"] = str(exc)
+        report["elapsed_seconds"] = round(time.monotonic() - started_at, 3)
         return _empty_training_frame(), report
 
     rows: list[dict] = []
     scanned = 0
+    timed_out = False
     for record in dataset:
+        if max_scan_seconds is not None and max_scan_seconds > 0:
+            if time.monotonic() - started_at >= max_scan_seconds:
+                timed_out = True
+                break
         scanned += 1
         text = _join_text_parts(record.get("title"), record.get("text"))
         if len(text) < 15:
@@ -490,9 +508,14 @@ def _load_amazon_reviews_2023(
             break
 
     result_df = _finalize_rows(pd.DataFrame(rows), default_label=0)
-    report["status"] = "loaded" if not result_df.empty else "empty"
+    if timed_out:
+        report["status"] = "partial_timeout" if not result_df.empty else "timeout"
+        report["reason"] = "Stopped by Amazon Reviews 2023 scan time budget."
+    else:
+        report["status"] = "loaded" if not result_df.empty else "empty"
     report["records_raw"] = int(scanned)
     report["records_used"] = int(len(result_df))
+    report["elapsed_seconds"] = round(time.monotonic() - started_at, 3)
     return result_df, report
 
 

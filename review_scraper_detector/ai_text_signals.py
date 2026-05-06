@@ -255,8 +255,10 @@ def train_ai_text_detector(
     output_dir: str | Path = "outputs",
     n_samples: int = 2600,
     random_state: int = 42,
+    real_negative_texts: list[str] | None = None,
+    max_real_negative_texts: int = 2000,
 ) -> dict:
-    """Train the lightweight AI-text detector on local synthetic RU/EN examples."""
+    """Train the lightweight AI-text detector with synthetic positives and real marketplace negatives."""
     from scipy import sparse
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.linear_model import LogisticRegression
@@ -267,6 +269,20 @@ def train_ai_text_detector(
     artifacts_dir = ensure_directory(artifacts_dir)
     output_dir = ensure_directory(output_dir)
     texts, labels = _generate_training_examples(n_samples=n_samples, random_state=random_state)
+    real_negative_count = 0
+    if real_negative_texts:
+        real_negative_candidates = [
+            normalize_whitespace(text)
+            for text in real_negative_texts
+            if isinstance(text, str) and len(normalize_whitespace(text).split()) >= AI_TEXT_MIN_WORDS
+        ]
+        rng = random.Random(random_state + 7919)
+        rng.shuffle(real_negative_candidates)
+        real_negative_candidates = real_negative_candidates[: max(0, int(max_real_negative_texts))]
+        texts.extend(real_negative_candidates)
+        labels.extend([0] * len(real_negative_candidates))
+        real_negative_count = len(real_negative_candidates)
+
     labels_array = np.asarray(labels, dtype=int)
 
     train_texts, test_texts, train_labels, test_labels = train_test_split(
@@ -319,6 +335,7 @@ def train_ai_text_detector(
         "hint_threshold": AI_TEXT_HINT_THRESHOLD,
         "numeric_feature_names": NUMERIC_FEATURE_NAMES,
         "trained_rows": int(len(texts)),
+        "real_negative_rows": int(real_negative_count),
         "random_state": int(random_state),
         "metrics": metrics,
     }
@@ -330,6 +347,7 @@ def train_ai_text_detector(
         "artifact_path": str(artifact_path),
         "version": AI_TEXT_MODEL_VERSION,
         "training_rows": int(len(texts)),
+        "real_negative_rows": int(real_negative_count),
         "test_rows": int(len(test_texts)),
         "metrics": metrics,
         "threshold": AI_TEXT_FLAG_THRESHOLD,
